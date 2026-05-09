@@ -1,0 +1,16 @@
+# MindSave .gitignore
+
+# Ignore runtime data (keep directory structure via .gitkeep)
+.mindsave/snapshots/*
+!.mindsave/snapshots/.gitkeep
+!.mindsave/snapshots/example_snapshot.md
+.mindsave/tool_logs/*
+!.mindsave/tool_logs/.gitkeep
+!.mindsave/tool_logs/example-session.jsonl
+
+# Keep index and gitkeep
+!.mindsave/index.json
+
+# OS
+.DS_Store
+Thumbs.db
