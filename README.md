@@ -1,6 +1,6 @@
-# MindSave v2.0 — AI Conversation Continuity Runtime
+# MindSave v3.0 — Hierarchical Agent State System
 
-> 让 AI 对话跨会话无缝续行 | Seamless AI conversation continuity across sessions
+> 三层状态分层，≤300 tokens 恢复行动能力 | Three-layer state hierarchy, restore action in ≤300 tokens
 
 [English](#english) | [中文](#中文)
 
@@ -8,215 +8,245 @@
 
 ## English
 
-### What is MindSave?
+### The Problem
 
-MindSave is a **model-agnostic conversation continuity system** for AI coding assistants. It captures structured snapshots of your work state — task goals, completed steps, active files, key decisions — and restores them in new conversations with zero information loss.
-
-### Why MindSave?
-
-- **Context windows die. Work shouldn't.** When a conversation overflows or breaks, MindSave picks up right where you left off.
-- **Model-agnostic.** Works with any AI assistant that supports file read/write operations (Claude, GPT-4, Gemini, etc.).
-- **Zero dependencies.** Uses only basic file tools — no APIs, no databases, no external services.
-- **Tiered restore.** Choose lightweight (L1), standard (L2), or full (L3) restoration based on your needs.
-
-### How It Works
+Traditional AI memory systems save **everything** and restore **everything**. This creates a paradox:
 
 ```
-┌─────────────────────────────────────────────┐
-│              Conversation N                 │
-│                                             │
-│  Working on task... files changed...        │
-│                                             │
-│  /save ──→ Snapshot created                 │
-│            (.mindsave/snapshots/*.md)        │
-└─────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────┐
-│            Conversation N+1                 │
-│                                             │
-│  /load ──→ Index displayed                  │
-│  Select snapshot                            │
-│  Choose level (L1/L2/L3)                    │
-│            ──→ Context restored             │
-│  Continuation Mode: executing next steps    │
-└─────────────────────────────────────────────┘
+Token cost of restore > Token cost of re-doing the work
 ```
+
+MindSave v3.0 solves this with a key insight: **not all tokens carry equal information density.**
+
+### The Insight
+
+| Information | Tokens | Value |
+|------------|--------|-------|
+| "Current goal: fix login" | 5 | **Critical** |
+| "Don't use Tailwind" | 4 | **Critical** — prevents repeated mistakes |
+| "WebSocket reconnect failed" | 5 | **Critical** — prevents dead-end re-exploration |
+| Full tool call history | 200+ | Low — AI can re-derive from current state |
+| Complete conversation log | 1000+ | Near zero — mostly noise |
+
+**The expensive part is not tokens — it's repeated reasoning.**
+
+### Three-Layer Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│  Layer 1: Execution Register  (≤300 tokens)     │
+│  Always restored. What to do RIGHT NOW.          │
+│  goal / state / next_action / active_files /     │
+│  blocker                                         │
+├─────────────────────────────────────────────────┤
+│  Layer 2: Cognitive Cache  (optional, ≤500 tok) │
+│  Restored on demand. What to AVOID and WHY.      │
+│  constraints / decisions / excluded_paths        │
+├─────────────────────────────────────────────────┤
+│  Layer 3: Cold Archive  (write-only, unlimited) │
+│  Never auto-restored. For debugging ONLY.        │
+│  tool_logs / completed_steps / file_changes      │
+└─────────────────────────────────────────────────┘
+```
+
+| Layer | Analogy | When Read | Token Budget |
+|-------|---------|-----------|-------------|
+| L1: Execution Register | CPU Register | Always | ≤300 |
+| L2: Cognitive Cache | L1/L2 Cache | On demand | ≤500 |
+| L3: Cold Archive | Disk Storage | Debug only | Unlimited |
+
+**Total restore cost: ≤800 tokens.** Compare to v2.0's 2000+ tokens.
+
+### Why This Works
+
+**Layer 1** answers: "What should I do next?"
+**Layer 2** answers: "What should I NOT do, and why?"
+**Layer 3** answers: "What happened?" (only when debugging)
+
+AI is excellent at **re-reasoning from small state**. It does NOT need to **re-read large history**.
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `/save` | Manually save current work as a structured snapshot |
-| `/load` | List and restore snapshots with tiered detail levels |
-| `/auto-snapshot` | Auto-triggered on context overflow (>80% tokens used) |
+| Command | Layer(s) | Description |
+|---------|----------|-------------|
+| `/save` | L1+L2+L3 | Save all three layers. L2 auto-extracted from conversation. |
+| `/load` | L1+L2 | Restore execution state + reasoning shortcuts. Enter Continuation Mode. |
+| `/recall` | L3 | Read-only inspection of history (debug/tracing). |
+| `/auto-snapshot` | L1 only | Overflow protection. ≤300 tokens. Then interrupt. |
 
-### Restore Levels
+### What Goes Where
 
-| Level | Content | Use Case |
-|-------|---------|----------|
-| **L1** | Goal + next steps + active files | Quick resume, you remember the context |
-| **L2** | L1 + completed steps + key context + file changes | Standard resume after a break |
-| **L3** | L2 + all tool call records | Full forensic restore, debugging |
+#### Layer 1 — Execution Register (always saved, always restored)
+
+```yaml
+goal: "Implement JWT auth with refresh token rotation"
+state: "Debugging refresh token invalidation"
+next_action: "Add token expiry check in useAuth hook"
+active_files:
+  - "src/hooks/useAuth.ts"
+  - "src/lib/token.ts"
+blocker: "Refresh token not triggering re-auth before API calls fail"
+```
+
+#### Layer 2 — Cognitive Cache (auto-extracted from conversation)
+
+```yaml
+constraints:
+  - "No external auth service — must be self-hosted"
+  - "User prefers httpOnly cookies over localStorage"
+decisions:
+  - "Access token: 15min, Refresh token: 7d with rotation"
+excluded_paths:
+  - "localStorage for tokens — XSS vulnerability, user rejected"
+  - "Single long-lived token — security risk"
+```
+
+#### Layer 3 — Cold Archive (write-only, never auto-restored)
+
+```markdown
+### Completed Steps
+1. Created JWT utility functions
+2. Implemented login/register endpoints
+...
+
+### File Changes
+src/hooks/useAuth.ts | 87 +++---
+src/lib/token.ts | 120 +++++++
+
+### Recent Tool Calls
+1. Edit src/hooks/useAuth.ts — Added token refresh on 401
+...
+```
+
+### Failure Memory
+
+The `excluded_paths` field is the most valuable part of Layer 2. It prevents **repeated mistakes**:
+
+```yaml
+excluded_paths:
+  - "OpenAI compatible format — MiniMax requires native API"
+  - "WebSocket reconnect — server drops after 30s, use polling"
+  - "CSS class-based theming — user prefers CSS variables"
+```
+
+**Rule of thumb**: If removing a piece of information would cause the next session to repeat a mistake or re-explore a dead end, it belongs in Layer 2.
 
 ### Installation
 
-#### For AI Coding Assistants
-
-1. Copy `CLAUDE.md` to your project root (or merge rules into your existing system prompt).
+1. Copy `CLAUDE.md` to your project root (or merge into your system prompt).
 2. Copy `SKILL.md` to your skills directory:
    - User-level: `~/.workbuddy/skills/mindsave/SKILL.md`
    - Project-level: `{project}/.workbuddy/skills/mindsave/SKILL.md`
-3. The `.mindsave/` directory will be auto-created on first `/save`.
+3. `.mindsave/` directory auto-created on first `/save`.
 
-#### Directory Structure
+### Directory Structure
 
 ```
 your-project/
-├── CLAUDE.md              # Runtime rules (merged into system prompt)
+├── CLAUDE.md              # Runtime rules (merge into system prompt)
+├── SKILL.md               # Skill file (loaded by AI assistant)
 ├── .mindsave/
 │   ├── index.json         # Snapshot index
-│   ├── snapshots/         # All snapshot files
-│   ├── tool_logs/         # Tool call logs (JSONL)
+│   ├── snapshots/         # All snapshot files (3-layer format)
+│   ├── tool_logs/         # Tool call logs (JSONL, Layer 3 backing)
 │   ├── workspace_snap/    # Workspace snapshots
 │   └── execution_graphs/  # Execution graphs
 └── ...
 ```
 
-### Snapshot Format
+### Version History
 
-Each snapshot is a Markdown file with YAML front-matter:
-
-```yaml
----
-snapshot_id: "feature_x_2026-05-09"
-created_at: "2026-05-09T22:00:00+08:00"
-task_goal: "Implement feature X"
-status: "in_progress"
-active_files:
-  - "src/feature.ts"
-next_steps:
-  - "Write tests"
-  - "Update docs"
----
-```
-
-### Tool Call Logging
-
-Every file modification or command execution is logged:
-
-```json
-{"timestamp":"2026-05-09T22:00:00+08:00","action":"write","target":"src/feature.ts","summary":"Created feature module"}
-```
-
-This enables L3 full restore with complete execution history.
+| Version | Name | Paradigm |
+|---------|------|----------|
+| v1.0 | Chat Snapshot | Save/load conversation summaries |
+| v2.0 | Conversation Continuity Runtime | Tiered restore (L1/L2/L3) |
+| **v3.0** | **Hierarchical Agent State System** | **Three-layer state hierarchy by information density** |
 
 ---
 
 ## 中文
 
-### MindSave 是什么？
+### 问题
 
-MindSave 是一个**模型无关的 AI 对话连续性系统**。它能结构化地保存当前工作状态——任务目标、已完成步骤、活跃文件、关键决策——并在新对话中零损耗恢复。
-
-### 为什么需要 MindSave？
-
-- **上下文窗口会满，工作不应该中断。** 对话溢出或断开时，MindSave 让你从上次停下的地方继续。
-- **模型无关。** 任何支持文件读写的 AI 助手都能用（Claude、GPT-4、Gemini 等）。
-- **零依赖。** 只用基础文件工具，不需要 API、数据库或外部服务。
-- **分级恢复。** 按需选择轻量（L1）、标准（L2）或完整（L3）恢复。
-
-### 工作原理
+传统 AI 记忆系统**什么都保存**，**什么都恢复**。这产生了一个悖论：
 
 ```
-┌─────────────────────────────────────────────┐
-│              对话 N                          │
-│                                             │
-│  正在工作... 文件在改...                      │
-│                                             │
-│  /save ──→ 生成快照                          │
-│            (.mindsave/snapshots/*.md)        │
-└─────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────┐
-│            对话 N+1                          │
-│                                             │
-│  /load ──→ 显示快照列表                       │
-│  选择快照                                    │
-│  选择恢复级别 (L1/L2/L3)                     │
-│            ──→ 上下文恢复                     │
-│  连续模式：从下一步开始执行                    │
-└─────────────────────────────────────────────┘
+恢复的 token 成本 > 重新做一遍的成本
 ```
+
+MindSave v3.0 用一个关键洞察解决这个问题：**不是所有 token 的信息密度都相同。**
+
+### 核心洞察
+
+| 信息 | Token | 价值 |
+|------|-------|------|
+| "当前目标：修复登录" | 5 | **关键** |
+| "不要用 Tailwind" | 4 | **关键** — 防止重复犯错 |
+| "WebSocket 重连失败" | 5 | **关键** — 防止重走死路 |
+| 完整工具调用历史 | 200+ | 低 — AI 可以从当前状态重新推导 |
+| 完整对话日志 | 1000+ | 接近零 — 大部分是噪音 |
+
+**真正昂贵的不是 token，而是重复推理。**
+
+### 三层架构
+
+```
+┌─────────────────────────────────────────────────┐
+│  Layer 1: 执行寄存器  (≤300 tokens)             │
+│  始终恢复。现在该做什么。                          │
+│  goal / state / next_action / active_files /     │
+│  blocker                                         │
+├─────────────────────────────────────────────────┤
+│  Layer 2: 认知缓存  (可选, ≤500 tokens)          │
+│  按需恢复。不该做什么以及为什么。                    │
+│  constraints / decisions / excluded_paths        │
+├─────────────────────────────────────────────────┤
+│  Layer 3: 冷存档  (只写不读, 无限制)              │
+│  永不自动恢复。仅调试用。                          │
+│  tool_logs / completed_steps / file_changes      │
+└─────────────────────────────────────────────────┘
+```
+
+| 层 | 类比 | 何时读取 | Token预算 |
+|---|------|---------|----------|
+| L1: 执行寄存器 | CPU寄存器 | 始终 | ≤300 |
+| L2: 认知缓存 | L1/L2缓存 | 按需 | ≤500 |
+| L3: 冷存档 | 磁盘存储 | 仅调试 | 无限制 |
+
+**恢复总成本：≤800 tokens。** 对比 v2.0 的 2000+ tokens。
+
+### 为什么有效
+
+**Layer 1** 回答："下一步该做什么？"
+**Layer 2** 回答："不该做什么？为什么？"
+**Layer 3** 回答："发生了什么？"（仅调试时）
+
+AI 擅长**从小状态重新推理**，不需要**重新阅读大量历史**。
 
 ### 命令
 
-| 命令 | 说明 |
-|------|------|
-| `/save` | 手动将当前工作保存为结构化快照 |
-| `/load` | 列出并恢复快照，支持分级详情 |
-| `/auto-snapshot` | 上下文溢出时自动触发（token 使用 >80%） |
-
-### 恢复级别
-
-| 级别 | 内容 | 适用场景 |
-|------|------|---------|
-| **L1** | 目标 + 下一步 + 活跃文件 | 快速恢复，你还记得上下文 |
-| **L2** | L1 + 已完成步骤 + 关键上下文 + 文件变更 | 中断后的标准恢复 |
-| **L3** | L2 + 全部工具调用记录 | 完整溯源，调试用 |
+| 命令 | 层 | 说明 |
+|------|---|------|
+| `/save` | L1+L2+L3 | 保存三层。L2 从对话中自动提炼。 |
+| `/load` | L1+L2 | 恢复执行状态 + 推理捷径。进入连续模式。 |
+| `/recall` | L3 | 只读检查历史（调试/回溯）。 |
+| `/auto-snapshot` | 仅L1 | 溢出保护。≤300 tokens。然后中断。 |
 
 ### 安装
 
-#### 用于 AI 编程助手
-
-1. 将 `CLAUDE.md` 复制到项目根目录（或合并规则到现有系统提示中）。
+1. 将 `CLAUDE.md` 复制到项目根目录（或合并到系统提示中）。
 2. 将 `SKILL.md` 复制到技能目录：
    - 用户级：`~/.workbuddy/skills/mindsave/SKILL.md`
    - 项目级：`{project}/.workbuddy/skills/mindsave/SKILL.md`
-3. `.mindsave/` 目录会在首次 `/save` 时自动创建。
+3. `.mindsave/` 目录在首次 `/save` 时自动创建。
 
-#### 目录结构
+### 版本历史
 
-```
-your-project/
-├── CLAUDE.md              # 运行时规则（合并到系统提示）
-├── .mindsave/
-│   ├── index.json         # 快照索引
-│   ├── snapshots/         # 所有快照文件
-│   ├── tool_logs/         # 工具调用日志（JSONL）
-│   ├── workspace_snap/    # 工作区快照
-│   └── execution_graphs/  # 执行图谱
-└── ...
-```
-
-### 快照格式
-
-每个快照是一个带 YAML 前导的 Markdown 文件：
-
-```yaml
----
-snapshot_id: "feature_x_2026-05-09"
-created_at: "2026-05-09T22:00:00+08:00"
-task_goal: "实现功能 X"
-status: "in_progress"
-active_files:
-  - "src/feature.ts"
-next_steps:
-  - "编写测试"
-  - "更新文档"
----
-```
-
-### 工具调用日志
-
-每次文件修改或命令执行都会记录：
-
-```json
-{"timestamp":"2026-05-09T22:00:00+08:00","action":"write","target":"src/feature.ts","summary":"创建功能模块"}
-```
-
-这使得 L3 完整恢复可以回溯完整的执行历史。
+| 版本 | 名称 | 范式 |
+|------|------|------|
+| v1.0 | 对话快照 | 保存/加载对话摘要 |
+| v2.0 | 对话连续性运行时 | 分级恢复 (L1/L2/L3) |
+| **v3.0** | **分层Agent状态系统** | **按信息密度的三层状态分层** |
 
 ---
 
@@ -226,4 +256,4 @@ MIT
 
 ---
 
-_Built with ❤️ for AI-assisted development workflows._
+_Built with the insight: information density > token count._

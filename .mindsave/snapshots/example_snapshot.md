@@ -1,37 +1,52 @@
 ---
-snapshot_id: "example_feature_2026-05-09"
+snapshot_id: "auth_feature_2026-05-09"
 created_at: "2026-05-09T22:00:00+08:00"
-task_goal: "Implement dark mode toggle for the settings page"
-status: "in_progress"
+version: "3.0"
+
+# Layer 1: Execution Register (always restored)
+goal: "Implement JWT-based authentication with refresh token rotation"
+state: "Debugging refresh token invalidation — tokens expire silently"
+next_action: "Add token expiry check in useAuth hook, test with 60s TTL"
 active_files:
-  - "src/components/Settings.tsx"
-  - "src/hooks/useTheme.ts"
-  - "src/styles/theme.css"
-next_steps:
-  - "Add toggle component to Settings page"
-  - "Persist theme preference to localStorage"
-  - "Write unit tests for useTheme hook"
+  - "src/hooks/useAuth.ts"
+  - "src/middleware/auth.ts"
+  - "src/lib/token.ts"
+blocker: "Refresh token not triggering re-auth before API calls fail"
+
+# Layer 2: Cognitive Cache (restored on demand)
+constraints:
+  - "No external auth service (Auth0, Clerk) — must be self-hosted"
+  - "User prefers httpOnly cookies over localStorage for tokens"
+  - "Must support Safari ITP (Intelligent Tracking Prevention)"
+decisions:
+  - "Use access+refresh token pair, not session-based auth"
+  - "Access token: 15min TTL, Refresh token: 7d TTL with rotation"
+  - "Store refresh token in httpOnly secure cookie, access token in memory only"
+excluded_paths:
+  - "localStorage for tokens — XSS vulnerability, user explicitly rejected"
+  - "Single long-lived token — security risk, doesn't follow best practices"
+  - "WebSocket-based token refresh — overcomplicates, standard HTTP works fine"
 ---
 
-## Completed Steps
-1. Analyzed existing theme system and CSS variables
-2. Created useTheme hook with light/dark mode support
-3. Added CSS variable definitions for both themes
+## Layer 3: Cold Archive (debug only)
 
-## Key Context
-- Using CSS variables for theme switching (not class-based)
-- Theme preference stored in localStorage with key "theme"
-- Must support system preference detection via `prefers-color-scheme`
-- User prefers smooth transitions between themes (200ms)
+### Completed Steps
+1. Created JWT utility functions (sign, verify, rotate)
+2. Implemented login/register endpoints with bcrypt
+3. Added refresh token model in database
+4. Created auth middleware for protected routes
+5. Built useAuth hook with automatic token attachment
 
-## File Change Summary
- src/styles/theme.css       | 45 +++
- src/hooks/useTheme.ts      | 32 +++
- src/components/Settings.tsx | 12 +-
+### File Changes
+ src/hooks/useAuth.ts     | 87 +++---
+ src/middleware/auth.ts    | 45 ++--
+ src/lib/token.ts         | 120 +++++++
+ src/api/auth.ts          | 67 ++++
+ prisma/schema.prisma     | 12 +-
 
-## Recent Tool Calls
-1. Write src/styles/theme.css — Created CSS variable definitions for light/dark themes
-2. Write src/hooks/useTheme.ts — Created theme management hook
-3. Edit src/components/Settings.tsx — Imported useTheme hook
-4. Bash npm test — Verified existing tests still pass
-5. Read src/App.tsx — Checked theme provider integration point
+### Recent Tool Calls
+1. Edit src/hooks/useAuth.ts — Added token refresh on 401 response
+2. Bash npx prisma db push — Updated database schema
+3. Read src/middleware/auth.ts — Checked token verification logic
+4. Write src/lib/token.ts — Created token utility with rotation support
+5. Bash npm test -- --grep "auth" — Ran auth tests: 8/12 passing
