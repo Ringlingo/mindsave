@@ -315,47 +315,47 @@ your-project/
 
 **Zero dependencies. No npm/pip packages. No API keys. Works with any LLM.**
 
-### Version History
+### Current Problems & Future Optimization
 
-| Version | Name | Key Change |
-|---------|------|------------|
-| v1.0 | Chat Snapshot | Save/load conversation summaries |
-| v2.0 | Conversation Continuity Runtime | Tiered restore (L1/L2/L3) |
-| **v3.0** | **Hierarchical Agent State System** | **Auto-trigger, failure memory, adaptive threshold, snapshot cleanup, ≤800 token restore** |
-| v3.1 | Signal File Heartbeat | Unified signal.json with pressure_state, growth_rate, complexity tracking |
-| v3.2 | Exclusion Anti-Pattern Library | Per-project excluded_paths aggregation into shared anti-pattern database |
-| v3.3 | Mermaid Execution Graphs | Tool call logs → Mermaid DAG with node status, dependency edges, SVG export |
-| v3.4 | SDK Package | Python + TypeScript SDK with mindsave.save() / mindsave.restore() for LangGraph, CrewAI, AutoGen, OpenHands |
-| v3.5 | Visual Dashboard | Single-file HTML dashboard: snapshot timeline, token ratio chart, execution graph preview |
+For detailed analysis and implementation plan, see [ROADMAP.md](./ROADMAP.md).
 
-#### v3.1 — Signal File Heartbeat
-- Merged "Signal File Integration" and "Signal File (Optional)" into unified `.mindsave/signal.json`
-- Added `pressure_state` (GREEN/YELLOW/RED), `growth_rate`, `complexity`, `estimated_tokens_ratio`
-- Dynamic thresholds update in real-time after every tool call
+**Core Problems:**
 
-#### v3.2 — Exclusion Anti-Pattern Library
-- `excluded_paths` now aggregated across authorized projects
-- `data/antipatterns/anti_patterns.json` provides project-type groupings
-- New onboarding reference: initialize new projects with known failure patterns
+| # | Problem | Impact |
+|---|---------|--------|
+| 1 | Still Prompt Runtime | Relies on model "voluntary compliance", not enforceable |
+| 2 | YAML Summarization | State compression is manual summary, not real runtime compression |
+| 3 | Constraint Explosion | Unbounded constraint list → restore cost > continuation benefit |
+| 4 | Unstable L2 Extraction | AI misses/ Hallucinates constraints, no deterministic consistency |
 
-#### v3.3 — Mermaid Execution Graphs
-- Tool call logs in `.mindsave/tool_logs/*.jsonl` → Mermaid flowchart
-- Node states: `done` (green), `pending` (gray), `failed` (red)
-- Edges show temporal dependency
-- SVG export via `mindsave_execution_graph.py --export-svg`
+**Most Valuable Part: `excluded_paths`**
 
-#### v3.4 — SDK Package
-- `sdk/python/mindsave/` — Python SDK with `save()`, `restore()`, `list()`, `stats()`
-- `sdk/typescript/mindsave/` — TypeScript SDK with full type definitions
-- Framework integrations: LangGraph Checkpointer, CrewAI Memory, AutoGen Storage, OpenHands State
-- Programmatic API: no manual /save needed, Agent frameworks call automatically
+The `excluded_paths` field is the most original breakthrough in MindSave — it prevents repeating mistakes, equivalent to:
 
-#### v3.5 — Visual Dashboard
-- Single `mindsave_dashboard.html` — no build, no server, pure client-side
-- Snapshot timeline with hover details
-- Token ratio pie chart (L1/L2/L3)
-- Embedded Mermaid execution graph preview
-- Works offline, all data read from local `.mindsave/` files
+- Senior Engineer Memory
+- RL Negative Reward
+- Human Expert Intuition
+
+**Phase 1 Priority (v3.5.0):**
+
+| Priority | Direction | Goal |
+|----------|-----------|------|
+| P0 | Failure Graph | Graph-structure `excluded_paths` with `repeat_count`, `confidence_score` |
+| P1 | Constraint Compression | Text constraints → Symbolic constraints |
+| P2 | Deterministic Hooks | Structured hooks replace unstable AI extraction |
+| P3 | Execution DAG | Linear `next_action` → Dependency graph |
+
+**What Not to Do:**
+- ❌ Continue iterating Dashboard UI
+- ❌ Add more commands (`/snapshot export/merge`)
+- ❌ Plain chat memory features
+- ❌ Over-engineered SDK packaging
+
+**Long-term Vision:**
+
+```
+Prompt-Orchestrated Runtime → Structured Cognitive Runtime → Native Agent Runtime Kernel
+```
 
 ---
 
@@ -627,43 +627,47 @@ your-project/
 
 **零依赖。无需 npm/pip 包。无需 API 密钥。适配任何 LLM。**
 
-### 版本历史
+### 当前问题与未来优化方向
 
-| 版本 | 名称 | 核心变化 |
-|------|------|---------|
-| v1.0 | 对话快照 | 保存/加载对话摘要 |
-| v2.0 | 对话连续性运行时 | 分级恢复 (L1/L2/L3) |
-| **v3.0** | **分层Agent状态系统** | **自动触发、失败记忆、自适应阈值、快照清理、≤800 token 恢复** |
-| v3.1 | Signal File Heartbeat | 统一 signal.json，实时追踪压力状态/增长率/复杂度 |
-| v3.2 | 反模式库 | 跨项目 excluded_paths 聚合为共享知识库 |
-| v3.3 | Mermaid 执行图 | 工具调用日志 → Mermaid DAG，支持 SVG 导出 |
-| v3.4 | SDK 封装 | Python + TypeScript 双 SDK，支持 LangGraph/CrewAI/AutoGen/OpenHands |
-| v3.5 | 可视化仪表板 | 单 HTML 文件，快照时间线 + Token 占比 + 执行图预览 |
+详细分析见 [ROADMAP.md](./ROADMAP.md)。
 
-#### v3.1 — Signal File Heartbeat
-- "Signal File Integration" 和 "Signal File (Optional)" 合并为统一的 `.mindsave/signal.json`
-- 新增 `pressure_state` (GREEN/YELLOW/RED)、`growth_rate`、`complexity`、`estimated_tokens_ratio`
-- 动态阈值实时更新
+**核心问题：**
 
-#### v3.2 — 反模式库
-- `excluded_paths` 可跨授权项目聚合
-- `data/antipatterns/anti_patterns.json` 按技术类别分组
-- 新项目初始化时可参考已知失败模式
+| # | 问题 | 影响 |
+|---|------|------|
+| 1 | 仍属 Prompt Runtime | 依赖模型"自觉遵守"，不可强制 |
+| 2 | YAML Summarization | 状态压缩是人工摘要，非真正运行时压缩 |
+| 3 | Constraint Explosion | 约束无限膨胀，最终 restore cost > benefit |
+| 4 | L2 提取不稳定 | 模型会漏/误判/hallucinate 约束 |
 
-#### v3.3 — Mermaid 执行图
-- `.mindsave/tool_logs/*.jsonl` → Mermaid 流程图
-- 节点状态：done (绿)、pending (灰)、failed (红)
-- 支持 SVG 导出：`python sdk/tools/mindsave_execution_graph.py --export-svg`
+**最有价值的部分：`excluded_paths`**
 
-#### v3.4 — SDK 封装
-- `sdk/python/mindsave.py` — Python SDK，`save()`/`restore()`/`list()`/`stats()`
-- `sdk/typescript/` — TypeScript SDK，完整类型定义
-- 框架集成：LangGraph Checkpointer、CrewAI Memory、AutoGen Storage、OpenHands State
+`excluded_paths` 是 MindSave 最接近原创突破的模块——它防止重复犯错，等价于：
 
-#### v3.5 — 可视化仪表板
-- `sdk/tools/mindsave_dashboard.html` — 无需构建、无需服务器、纯前端
-- 快照时间线、Token 占比饼图、执行图预览
-- 完全离线运行，数据全部从本地 `.mindsave/` 读取
+- 高级工程师的经验记忆
+- 强化学习的负向奖励
+- 人类专家的直觉
+
+**Phase 1 优先级（v3.5.0）：**
+
+| 优先级 | 方向 | 目标 |
+|--------|------|------|
+| P0 | Failure Graph | 图结构化 `excluded_paths`，支持 `repeat_count`、`confidence_score` |
+| P1 | Constraint Compression | 文本约束 → 符号化约束 |
+| P2 | Deterministic Hooks | Structured hooks 替代不稳定的 AI 提炼 |
+| P3 | Execution DAG | 线性 `next_action` → 依赖图 |
+
+**不要做的事：**
+- ❌ 继续迭代 Dashboard UI
+- ❌ 添加更多命令（`/snapshot export/merge`）
+- ❌ 普通聊天记忆功能
+- ❌ 过度工程化的 SDK 封装
+
+**长期愿景：**
+
+```
+Prompt-Orchestrated Runtime → Structured Cognitive Runtime → Native Agent Runtime Kernel
+```
 
 ---
 
