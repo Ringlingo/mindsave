@@ -1,7 +1,7 @@
 # MindSave v3.0
 
-> AI Agent 的分层状态系统 — 用 ≤300 tokens 恢复行动能力
-> Hierarchical Agent State System — restore action in ≤300 tokens
+> A Failure-aware Runtime — restore agent action capability, not conversation history
+> Layered Agent State System with Negative Cognitive Memory
 
 [English](#english) | [中文](#中文)
 
@@ -11,13 +11,66 @@
 
 ### The Problem
 
-When AI conversations hit the context limit, all progress is lost. Traditional memory systems save **everything** and restore **everything**, creating a paradox:
+AI agents don't fail because they forget conversations.
+
+They fail because they repeat rejected paths.
+
+Traditional memory systems save **everything** — chat logs, tool traces, reasoning chains — and restore **everything**, creating a paradox:
 
 ```
 Token cost of restore > Token cost of re-doing the work
 ```
 
-MindSave v3.0 solves this: **not all tokens carry equal information density.** A 5-token constraint ("no Tailwind") is worth more than 500 tokens of tool logs.
+But here's the deeper issue:
+
+**Most memory systems preserve what worked. They don't preserve what didn't.**
+
+MindSave is built on a different insight:
+
+> **Not all tokens carry equal information density.**
+
+A 5-token constraint ("no Tailwind") prevents more rework than 500 tokens of successful tool logs.
+
+MindSave introduces **Failure Memory** — a runtime layer that preserves what should **not** be done again. This is what separates a **cognitive runtime** from a **snapshot tool**.
+
+**Core concepts:**
+
+- **Failure-aware Runtime** — A runtime that remembers failures, not just progress
+- **Negative Cognitive Memory** — Preserving rejected paths is more valuable than preserving successful ones
+- **Cognitive Continuation** — Restore execution state, not conversation history
+- **Execution-State Compression** — Information density over token count
+
+### Why Failure Memory Matters
+
+Most memory systems preserve successful outputs. But advanced agents fail more often from **repeating bad decisions** than from forgetting good ones.
+
+**The failure loop problem:**
+
+```
+Session 1: Try Tailwind → User rejects → excluded_paths += 1
+Session 2: Try Tailwind again (no memory) → User frustrated
+Session 3: Try Tailwind again (still no memory) → Project derailed
+```
+
+**Failure Graph changes this:**
+
+```
+Tailwind
+ ├─ rejected_by: user
+ ├─ reason: "causes style conflict"
+ ├─ repeat_count: 3
+ └─ alternatives: ["CSS Modules", "vanilla CSS with variables"]
+```
+
+The next session **knows** Tailwind was rejected before it tries again — without re-reading any chat history.
+
+**What Failure Graph stores:**
+
+- Rejected solutions and why they failed
+- Architectural dead ends
+- User-disliked approaches
+- Recurring anti-patterns across projects
+- Confidence scores and repeat counts
 
 ### Quick Start
 
@@ -363,13 +416,64 @@ Prompt-Orchestrated Runtime → Structured Cognitive Runtime → Native Agent Ru
 
 ### 问题
 
-AI 对话碰到上下文限制时，所有进度都丢了。传统记忆系统**什么都保存、什么都恢复**，形成悖论：
+AI 智能体失败的原因，不是忘记了对话，而是**重复了被拒绝的路径**。
+
+传统记忆系统**什么都保存** — 聊天记录、工具日志、推理链 — 然后**什么都恢复**，形成悖论：
 
 ```
 恢复的 token 成本 > 重新做一遍的成本
 ```
 
-MindSave v3.0 的解决思路：**不是所有 token 的信息密度都一样。** 5个 token 的约束（"不要用 Tailwind"）比 500 个 token 的工具日志更有价值。
+但更深层的问题是：
+
+**大多数记忆系统保存的是成功的输出。它们不保存失败的经验。**
+
+MindSave 建立在另一个洞察之上：
+
+> **不是所有 token 的信息密度都一样。**
+
+一个 5 token 的约束（"不要用 Tailwind"）比 500 token 的成功工具日志更能防止返工。
+
+MindSave 引入了**失败记忆（Failure Memory）** — 一个保存"不应该再做什么"的运行时层。这将 MindSave 从**记忆工具**拉高到**认知运行时**。
+
+**核心概念：**
+
+- **Failure-aware Runtime** — 记住失败、而非仅记住进度的运行时
+- **Negative Cognitive Memory** — 保存被拒绝的路径比保存成功经验更有价值
+- **Cognitive Continuation** — 恢复执行状态，而非对话历史
+- **Execution-State Compression** — 信息密度优先于 token 数量
+
+### 为什么失败记忆重要
+
+大多数记忆系统保存成功的输出。但高级智能体失败的原因更多是**重复犯错**，而非遗忘。
+
+**失败循环问题：**
+
+```
+会话 1：尝试 Tailwind → 用户拒绝 → excluded_paths += 1
+会话 2：再次尝试 Tailwind（无记忆）→ 用户不满
+会话 3：仍然再次尝试（仍然无记忆）→ 项目偏离
+```
+
+**Failure Graph 改变了这一点：**
+
+```yaml
+Tailwind:
+  rejected_by: user
+  reason: "causes style conflict"
+  repeat_count: 3
+  alternatives: ["CSS Modules", "vanilla CSS with variables"]
+```
+
+下一个会话**知道** Tailwind 之前被拒绝过，无需重读任何聊天记录。
+
+**Failure Graph 存储的内容：**
+
+- 被拒绝的方案及原因
+- 架构死胡同
+- 用户不喜欢的方案
+- 跨项目的反复出现反模式
+- 置信度评分和重复计数
 
 ### 快速上手
 
