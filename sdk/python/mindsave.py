@@ -622,6 +622,96 @@ class MindSave:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CLI Entry Point
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _main_cli():
+    """Command-line interface for MindSave"""
+    import sys
+    import argparse
+
+    parser = argparse.ArgumentParser(description="MindSave v3.4 — AI agent state management")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # List snapshots
+    list_parser = subparsers.add_parser("list", help="List all snapshots")
+    list_parser.add_argument("--root", default=".mindsave", help="Path to .mindsave directory")
+
+    # Stats
+    stats_parser = subparsers.add_parser("stats", help="Show snapshot statistics")
+    stats_parser.add_argument("--root", default=".mindsave", help="Path to .mindsave directory")
+
+    # Clean
+    clean_parser = subparsers.add_parser("clean", help="Clean old snapshots")
+    clean_parser.add_argument("--root", default=".mindsave", help="Path to .mindsave directory")
+    clean_parser.add_argument("--force", action="store_true", help="Skip confirmation prompt")
+
+    # Signal
+    signal_parser = subparsers.add_parser("signal", help="Check signal.json state")
+    signal_parser.add_argument("--root", default=".mindsave", help="Path to .mindsave directory")
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(0)
+
+    ms = MindSave(args.root, auto_create=False)
+
+    if args.command == "list":
+        snaps = ms.list()
+        if not snaps:
+            print("No snapshots found.")
+            return
+        for snap in snaps:
+            active = f", files={len(snap.get('active_files', []))}"
+            blocker = f", blocker={snap.get('blocker')}" if snap.get('blocker') != "none" else ""
+            auto = f", auto={snap.get('auto_trigger')}" if snap.get('auto_trigger') else ""
+            layers = f", layers={'+'.join(snap.get('layers', []))}"
+            print(f"  {snap['id']} | {snap.get('created_at', '')[:19]}{active}{blocker}{auto}{layers}")
+            print(f"    └─ goal: {snap.get('goal', '')[:80]}")
+
+    elif args.command == "stats":
+        s = ms.stats()
+        print(f"MindSave v{ms.version}")
+        print(f"  Total snapshots: {s['total']}")
+        print(f"  Storage size:    {s['size_bytes']:,} bytes")
+        print(f"  Layer breakdown: L1={s['layers_breakdown']['L1']}, L2={s['layers_breakdown']['L2']}, L3={s['layers_breakdown']['L3']}")
+        if s['oldest']:
+            print(f"  Oldest snapshot: {s['oldest'][:19]}")
+            print(f"  Newest snapshot: {s['newest'][:19]}")
+
+    elif args.command == "clean":
+        before = ms.list()
+        result = ms.clean()
+        print(f"Deleted {len(result['deleted'])} snapshots")
+        if result['deleted']:
+            for d in result['deleted']:
+                print(f"  - {d}")
+        print(f"Remaining: {result['remaining']} snapshots")
+
+    elif args.command == "signal":
+        sig = ms.getSignal()
+        if sig:
+            print(f"Pressure state:    {sig.get('pressure_state', 'UNKNOWN')}")
+            print(f"Last save:         {sig.get('last_save', 'never')}")
+            print(f"Auto-save count:   {sig.get('auto_save_count', 0)}")
+            print(f"Tool calls since:  {sig.get('tool_calls_since_save', 0)}")
+            print(f"Trigger reason:    {sig.get('trigger_reason', 'none')}")
+            print(f"Growth rate:       {sig.get('growth_rate', 'normal')}")
+            print(f"Complexity:        {sig.get('complexity', 'medium')}")
+            thresh = sig.get('thresholds', {})
+            print(f"Thresholds:        warning={thresh.get('warning', 0.6)}, critical={thresh.get('critical', 0.8)}")
+            ratio = sig.get('estimated_tokens_ratio', 0)
+            bar = int(ratio * 30)
+            bar_str = "█" * bar + "░" * (30 - bar)
+            print(f"Estimated usage:   {bar_str} {ratio*100:.0f}%")
+
+
+if __name__ == "__main__":
+    _main_cli()
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Framework Integration Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 

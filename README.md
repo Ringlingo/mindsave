@@ -62,16 +62,16 @@ cp SKILL.md ~/.workbuddy/skills/mindsave/SKILL.md
 
 **Total restore cost: ≤800 tokens** (L1+L2). Compare to saving entire conversation history.
 
-**Measured restore costs by project size:**
+**Typical token counts by scenario:**
 
-| Project Type | L1 Actual | L2 Actual | Total Restore |
+| Project Type | L1 Estimate | L2 Estimate | Total Estimate |
 |:---|:---|:---|:---|
-| Small (<50 files) | ~180 tokens | ~220 tokens | ~400 tokens |
-| Medium (50–200 files) | ~230 tokens | ~300 tokens | ~530 tokens |
-| Large (>200 files) | ~280 tokens | ~350 tokens | ~630 tokens |
-| Extreme (complex decisions) | ~300 tokens | ~480 tokens | ~780 tokens |
+| Small task (<50 files) | ~150–200 tokens | ~200–250 tokens | ~350–450 tokens |
+| Medium project (50–200 files) | ~200–250 tokens | ~250–350 tokens | ~450–600 tokens |
+| Large codebase (>200 files) | ~250–300 tokens | ~300–400 tokens | ~550–700 tokens |
+| Complex architecture work | ~280–320 tokens | ~400–500 tokens | ~680–820 tokens |
 
-> *Method: Run `/save` 3× per project size, measure L1/L2 token counts in snapshot files, average.*
+> *These are representative ranges based on observed usage patterns. Actual counts vary by task complexity, number of constraints, and excluded paths recorded.*
 
 ### Typical Workflow (End-to-End)
 
@@ -88,13 +88,85 @@ cp SKILL.md ~/.workbuddy/skills/mindsave/SKILL.md
 [AI]        (continues from restored state, no repeated reasoning)
 ```
 
-### CLAUDE.md Coexistence
+### SDK Installation (v3.4+)
 
-MindSave rules live in your project's `CLAUDE.md`. Best practices:
+MindSave provides production-ready SDKs for both Python and TypeScript:
 
-- Place MindSave rules at the **end** of `CLAUDE.md`, delimited by `<!-- MindSave boundary -->`
-- Keep total MindSave rules under **200 words** to minimize system prompt consumption
-- If your project already has extensive custom rules, distill MindSave to **3 core lines** in a local config file
+**Python SDK:**
+```bash
+# Install from PyPI
+pip install mindsave
+
+# CLI commands available after installation
+mindsave list     # List all snapshots
+mindsave stats    # Show statistics
+mindsave clean    # Clean old snapshots
+mindsave signal   # Check runtime pressure state
+```
+
+Python SDK API:
+```python
+from mindsave import MindSave
+
+ms = MindSave(".mindsave")
+ms.save({"goal": "...", "state": "...", "next_action": "..."})
+snapshot = ms.restore("snapshot_id")
+latest = ms.restore_latest()
+stats = ms.stats()
+```
+
+**TypeScript SDK:**
+```bash
+npm install mindsave
+```
+
+TypeScript SDK API:
+```typescript
+import { MindSave, LangGraphCheckpointer, CrewAIMemory } from "mindsave";
+
+const ms = new MindSave(".mindsave");
+ms.save({ goal: "...", state: "...", next_action: "..." });
+const snapshot = ms.restore("snapshot_id");
+```
+
+---
+
+### CLAUDE.md Integration
+
+MindSave rules are **merged** with the standard CLAUDE.md coding guidelines. This single file provides a complete AI coding assistant configuration:
+
+**Part 1 — Coding Guidelines (AI behavior):**
+| Section | Purpose |
+|---------|---------|
+| **Think Before Coding** | Explicit assumptions, surface tradeoffs, don't pick silently |
+| **Simplicity First** | Minimum code, no speculative features, no premature abstractions |
+| **Surgical Changes** | Only touch what's needed, match existing style, don't refactor working code |
+| **Goal-Driven Execution** | Verifiable success criteria, plan before implement, loop until verified |
+| **NeuroCortex Safety** | 5 hard rules + session checkpoint ritual (HR-001~HR-005) |
+
+**Part 2 — MindSave Runtime (State management):**
+| Section | Purpose |
+|---------|---------|
+| **Three-Layer Restore** | L1 (always) + L2 (on-demand) + L3 (never auto) |
+| **Commands** | `/save`, `/load`, `/recall`, `/snapshots`, `/auto-snapshot` |
+| **Save Rules** | Auto-extract L2 content by information density |
+| **Restore Rules** | Enter Continuation Mode, don't re-ask recorded info |
+| **Adaptive Threshold** | Dynamic overflow detection (growth rate × complexity) |
+| **Auto-Trigger** | 6 conditions for zero-config auto-save |
+| **Auto-Save Cooldown** | 5 min / 10 turn anti-spam mechanism |
+| **Snapshot Cleanup** | Max 20 snapshots + 30-day TTL |
+| **Tool Logging** | JSONL tool call logging for L3 |
+| **Storage Isolation** | All files under `.mindsave/` |
+
+```bash
+# Copy to your project root — AI assistants will auto-load CLAUDE.md
+cp CLAUDE.md your-project/
+```
+
+> **Design Decision**: We merge both into a single file because:
+> 1. Most AI platforms (Claude Code, Cursor, WorkBuddy) look for a single `CLAUDE.md`
+> 2. Coding guidelines and state management work synergistically — simpler = better compliance
+> 3. The combined file is still lightweight (~1500 words) and doesn't bloat context
 
 ### Commands
 
@@ -342,16 +414,16 @@ cp SKILL.md ~/.workbuddy/skills/mindsave/SKILL.md
 
 **恢复总成本：≤800 tokens**（L1+L2）。对比保存整个对话历史。
 
-**按项目规模实测恢复成本：**
+**典型场景 token 数量范围：**
 
-| 项目类型 | L1 实际消耗 | L2 实际消耗 | 恢复总成本 |
+| 项目类型 | L1 估计范围 | L2 估计范围 | 总估计范围 |
 |:---|:---|:---|:---|
-| 小型（<50 文件） | ~180 tokens | ~220 tokens | ~400 tokens |
-| 中型（50–200 文件） | ~230 tokens | ~300 tokens | ~530 tokens |
-| 大型（>200 文件） | ~280 tokens | ~350 tokens | ~630 tokens |
-| 极端复杂决策 | ~300 tokens | ~480 tokens | ~780 tokens |
+| 小型任务（<50 文件） | ~150–200 tokens | ~200–250 tokens | ~350–450 tokens |
+| 中型项目（50–200 文件） | ~200–250 tokens | ~250–350 tokens | ~450–600 tokens |
+| 大型代码库（>200 文件） | ~250–300 tokens | ~300–400 tokens | ~550–700 tokens |
+| 复杂架构工作 | ~280–320 tokens | ~400–500 tokens | ~680–820 tokens |
 
-> *测量方式：在各规模项目中执行3次 `/save`，取快照文件中 L1/L2 的 token 数平均值。*
+> *以上为基于实际使用模式的代表性范围。具体数值会因任务复杂度、约束条件数量、已记录失败路径数量等因素有所波动。*
 
 ### 典型使用场景（端到端）
 
@@ -368,13 +440,85 @@ cp SKILL.md ~/.workbuddy/skills/mindsave/SKILL.md
 [AI]        （从恢复状态继续，无需重复推理）
 ```
 
-### CLAUDE.md 共存策略
+### SDK 安装 (v3.4+)
 
-MindSave 规则存放在项目的 `CLAUDE.md` 中。推荐做法：
+MindSave 提供 Python 和 TypeScript 双 SDK，生产就绪：
 
-- 将 MindSave 规则放在 `CLAUDE.md` **末尾**，用 `<!-- MindSave 边界 -->` 标记分隔
-- MindSave 规则总长控制在 **200 词以内**，减少系统提示占用
-- 如果项目已有大量自定义规则，可将 MindSave 精简为 **3 行核心指令**放入本地配置
+**Python SDK:**
+```bash
+# 从 PyPI 安装
+pip install mindsave
+
+# 安装后可用 CLI 命令
+mindsave list     # 列出所有快照
+mindsave stats    # 显示统计信息
+mindsave clean    # 清理旧快照
+mindsave signal   # 查看运行时压力状态
+```
+
+Python SDK API:
+```python
+from mindsave import MindSave
+
+ms = MindSave(".mindsave")
+ms.save({"goal": "...", "state": "...", "next_action": "..."})
+snapshot = ms.restore("snapshot_id")
+latest = ms.restore_latest()
+stats = ms.stats()
+```
+
+**TypeScript SDK:**
+```bash
+npm install mindsave
+```
+
+TypeScript SDK API:
+```typescript
+import { MindSave, LangGraphCheckpointer, CrewAIMemory } from "mindsave";
+
+const ms = new MindSave(".mindsave");
+ms.save({ goal: "...", state: "...", next_action: "..." });
+const snapshot = ms.restore("snapshot_id");
+```
+
+---
+
+### CLAUDE.md 集成
+
+MindSave 规则已与标准 CLAUDE.md 编码指南**合并**。这单个文件提供了完整的 AI 编码助手配置：
+
+**第一部分 — 编码指南（AI 行为）：**
+| 章节 | 目的 |
+|------|------|
+| **先思考后编码** | 明确假设、暴露权衡、不做静默选择 |
+| **最小代码原则** | 最少代码、无推测性功能、不过早抽象 |
+| **精确修改** | 只碰必需内容、匹配现有风格、不重构工作代码 |
+| **目标驱动执行** | 可验证的成功标准、先计划后实现、循环直到验证通过 |
+| **NeuroCortex 安全层** | 5 条硬规则 + 会话结束检查仪式 (HR-001~HR-005) |
+
+**第二部分 — MindSave 运行时（状态管理）：**
+| 章节 | 目的 |
+|------|------|
+| **三层恢复机制** | L1 (始终) + L2 (按需) + L3 (永不自动) |
+| **命令系统** | `/save`, `/load`, `/recall`, `/snapshots`, `/auto-snapshot` |
+| **保存规则** | 按信息密度自动提取 L2 内容 |
+| **恢复规则** | 进入连续模式，不重复询问已记录信息 |
+| **自适应阈值** | 动态溢出检测（增长速率 × 复杂度） |
+| **自动触发** | 6 种零配置自动保存条件 |
+| **自动保存冷却** | 5分钟/10轮对话防冗余机制 |
+| **快照清理** | 最多20个快照 + 30天自动过期 |
+| **工具日志** | JSONL 工具调用日志用于 L3 |
+| **存储隔离** | 所有文件统一在 `.mindsave/` 目录下 |
+
+```bash
+# 复制到项目根目录 — AI 助手会自动加载 CLAUDE.md
+cp CLAUDE.md your-project/
+```
+
+> **设计决策**：我们将两者合并为一个文件的原因：
+> 1. 大多数 AI 平台（Claude Code、Cursor、WorkBuddy）只查找单个 `CLAUDE.md` 文件
+> 2. 编码指南与状态管理协同工作 — 越简单 = 遵循越好
+> 3. 合并后的文件仍然轻量（~1500 字），不会造成上下文膨胀
 
 ### 命令
 

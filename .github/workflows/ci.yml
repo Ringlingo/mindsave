@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-python:
+    name: Python SDK Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run tests
+        run: python tests/test_python_sdk.py
+        working-directory: mindsave
+
+      - name: Build package
+        run: |
+          pip install build twine
+          python -m build
+        working-directory: mindsave/sdk/python
+
+  test-typescript:
+    name: TypeScript SDK Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: mindsave/sdk/typescript
+
+      - name: Build TypeScript
+        run: npm run build
+        working-directory: mindsave/sdk/typescript
+
+  lint-markdown:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DavidAnson/markdownlint-cli2-action@v14
+        with:
+          globs: "mindsave/**/*.md"
