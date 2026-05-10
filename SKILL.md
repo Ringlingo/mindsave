@@ -8,8 +8,9 @@ allowed-tools: [Read, Write, Edit, Glob, Bash]
 agent_created: true
 read_when:
   - User inputs /save, /load, /recall, or /auto-snapshot
-  - Context is about to overflow (token_usage_ratio > 0.8)
+  - Context pressure reaches WARNING or CRITICAL level (see Adaptive Threshold)
   - Resuming work from a previous conversation
+  - Any auto-trigger condition fires (see Auto-Trigger section)
 ---
 
 # MindSave v3.0 — Hierarchical Agent State System
@@ -52,7 +53,7 @@ read_when:
 Execute when receiving `/save`:
 
 1. Ensure `.mindsave/` directories exist.
-2. Generate topic summary from first user input (≤20 chars).
+2. Generate topic summary from first user input (≤20 chars, alphanumeric + underscore only, replace spaces/special chars with `_`). If same-day snapshot exists, append `-2`, `-3`, etc.
 3. **Layer 1 (always):**
    - `goal` — Current task objective (one sentence)
    - `state` — Current status description (one sentence)
@@ -94,6 +95,11 @@ decisions:
   - "{decision_1}"
 excluded_paths:
   - "{failed_approach_1}"
+
+# Auto-trigger metadata (optional)
+auto_trigger:
+  reason: "{sub-task-completed | error-recovered | tool-threshold | user-ending | key-decision | user-corrected}"
+  tool_calls_since_last: 12
 ---
 
 ## Layer 3: Cold Archive (debug only)
@@ -108,17 +114,38 @@ excluded_paths:
 1. {tool_call_1}
 ```
 
+### Auto-Save Cooldown (Anti-Spam)
+
+Prevent redundant snapshots from rapid-fire trigger signals:
+
+- **Rule**: Minimum **5 minutes** or **10 conversation turns** between auto-snapshots (whichever comes first).
+- **Exceptions**: Manual `/save` ignores cooldown. Session-end forced save ignores cooldown.
+- **Implementation**: Track `last_auto_save_time` and `last_auto_save_turn` in `.mindsave/signal.json`. Check before any auto-trigger fires.
+
 ### /load — State Restoration
 
 Execute when receiving `/load`:
 
-1. Read `.mindsave/index.json`, list snapshots in reverse chronological order.
-2. After user selects:
+1. Read `.mindsave/index.json`, list snapshots in reverse chronological order (newest first).
+2. **If only 1 snapshot exists**: auto-load it (skip selection).
+   **If multiple snapshots exist**: display numbered list with `snapshot_id`, `created_at`, and `goal`; wait for user to input a number.
+3. After snapshot selected:
    - **Read Layer 1** (Execution Register) — ALWAYS, this is the core.
    - **Read Layer 2** (Cognitive Cache) — if `constraints`, `decisions`, or `excluded_paths` are non-empty.
    - **Layer 3** (Cold Archive) — DO NOT read unless user requests `/recall`.
-3. Inject Layer 1 + Layer 2 into context.
-4. Reply: "MindSave restored. Goal: {goal}. Next: {next_action}. Entering Continuation Mode — executing next step."
+4. Inject Layer 1 + Layer 2 into context.
+5. Reply: "MindSave restored. Goal: {goal}. Next: {next_action}. Entering Continuation Mode — executing next step."
+
+**Optional: `/load --verify`** — Lightweight consistency check:
+
+- Compare snapshot's `active_files` against current workspace (files exist? modified since snapshot?).
+- If discrepancies found, alert user before proceeding:
+  ```
+  ⚠ Workspace differs from snapshot:
+  - src/auth.ts may have changed (last modified: 2026-05-09 14:25)
+  Continue with Continuation Mode?
+  ```
+- This check is **opt-in only** — adds minimal token cost. Default `/load` skips verification.
 
 **Total restoration cost: ≤800 tokens (Layer 1 + Layer 2).** Compare to v2.0's L2/L3 which could be 2000+ tokens.
 
@@ -126,21 +153,174 @@ Execute when receiving `/load`:
 
 Execute when user needs to debug or review history:
 
-1. Read the snapshot's Layer 3 section.
-2. Display completed steps, file changes, and tool calls.
-3. This is a **read-only inspection** — does not affect execution state.
+1. **Without keyword**: Read the selected snapshot's Layer 3 section. Display completed steps, file changes, and tool calls.
+2. **With keyword** (`/recall "JWT"`): Scan ALL L3 snapshot files for the keyword, return matching snapshots with brief context. Uses simple grep — no external index needed.
+3. If 20+ snapshots exist, maintain a lightweight keyword index (`.mindsave/l3_index.json`) updated on each `/save`.
+4. This is a **read-only inspection** — does not affect execution state.
+
+### /snapshots — Snapshot Management
+
+| Command | Description |
+|---------|-------------|
+| `/snapshots list` | List all snapshots with status (time, size, validity) |
+| `/snapshots clean` | Manually clean snapshots exceeding count limit or completed >30 days |
+| `/snapshots stats` | Show snapshot statistics (total count, total size, L1/L2/L3 distribution) |
 
 ### /auto-snapshot — Ultra-Light Overflow Protection
 
-When context overflows (>80% tokens), save ONLY Layer 1:
+When context reaches CRITICAL pressure level, save ONLY Layer 1:
 
 1. Extract: goal, state, next_action, active_files, blocker.
 2. Skip Layer 2 and Layer 3 (save tokens).
 3. Save as `.mindsave/snapshots/OVF_{topic}_{datetime}.md`.
 4. Update index.
-5. Interrupt: "⚠️ Context overflow. MindSave auto-saved (Layer 1 only). Start a new conversation with /load to continue."
+5. Interrupt: "⚠️ Context overflow imminent. MindSave auto-saved (Layer 1 only). Start a new conversation with /load to continue."
 
 **Auto-snapshot cost: ≤300 tokens generated, minimal context used.**
+
+## Adaptive Threshold (Dynamic Overflow Detection)
+
+Fixed thresholds (like 80%) fail because context growth is **non-linear** — a quiet Q&A session can safely run to 90%, while a tool-heavy coding session might need to save at 50%. MindSave uses a **three-tier adaptive system** inspired by CPU cache pressure signals.
+
+### Three Pressure Levels
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  GREEN (safe)    │ token_ratio < WARNING threshold           │
+│                  │ → Normal operation, no action needed      │
+├──────────────────┼───────────────────────────────────────────┤
+│  YELLOW (warn)   │ WARNING ≤ token_ratio < CRITICAL          │
+│                  │ → Proactive L1 save, alert user           │
+├──────────────────┼───────────────────────────────────────────┤
+│  RED (critical)  │ token_ratio ≥ CRITICAL threshold          │
+│                  │ → Emergency L1 save, interrupt session     │
+└──────────────────┴───────────────────────────────────────────┘
+```
+
+### Dynamic Threshold Calculation
+
+Thresholds are **not hardcoded** — they adapt based on three factors:
+
+**Base formula:**
+```
+WARNING  = base_warning × growth_multiplier × complexity_multiplier
+CRITICAL = base_critical × growth_multiplier × complexity_multiplier
+```
+
+**Default values:**
+| Parameter | Default | Range |
+|-----------|---------|-------|
+| `base_warning` | 0.60 (60%) | 0.50–0.70 |
+| `base_critical` | 0.80 (80%) | 0.70–0.90 |
+
+### Growth Rate Multiplier
+
+Context growth rate determines urgency. Estimate growth by comparing tool call frequency:
+
+| Growth Pattern | Signs | Multiplier | Effective WARNING | Effective CRITICAL |
+|---------------|-------|-----------|-------------------|-------------------|
+| **Slow** (Q&A, discussion) | ≤2 tool calls/5 min, mostly text | 1.2 | 72% | 96% |
+| **Normal** (typical coding) | 3–6 tool calls/5 min, mixed | 1.0 | 60% | 80% |
+| **Fast** (heavy refactoring) | ≥7 tool calls/5 min, many file edits | 0.8 | 48% | 64% |
+
+**Why**: Slow-growing sessions have more time to react → higher thresholds are safe. Fast-growing sessions can overflow in 2–3 turns → must save earlier.
+
+### Task Complexity Multiplier
+
+Complex tasks carry more state that's expensive to re-derive:
+
+| Complexity | Signs | Multiplier | Rationale |
+|-----------|-------|-----------|-----------|
+| **Low** (single-file edit, Q&A) | 1–2 active files, clear goal | 1.0 | Re-deriving is cheap |
+| **Medium** (feature development) | 3–5 active files, some decisions | 0.95 | Losing decisions hurts |
+| **High** (multi-system refactor, debugging) | 5+ active files, many constraints/decisions | 0.85 | Re-deriving is very expensive |
+
+### Signal File Integration (运行时心跳)
+
+Update `.mindsave/signal.json` with threshold state after each self-check:
+
+```json
+{
+  "last_save": "2026-05-10T14:30:00+08:00",
+  "last_auto_save_time": "2026-05-10T14:25:00+08:00",
+  "last_auto_save_turn": 12,
+  "tool_calls_since_save": 0,
+  "auto_save_count": 3,
+  "trigger_reason": "sub-task completed",
+  "pressure_state": "YELLOW",
+  "thresholds": {
+    "warning": 0.60,
+    "critical": 0.80
+  },
+  "growth_rate": "normal",
+  "complexity": "medium",
+  "estimated_tokens_ratio": 0.65
+}
+```
+
+This file serves as a **heartbeat** — other processes or the next session can check it to know when the last save happened. It tracks:
+
+- `last_save` / `last_auto_save_time` — timestamps of most recent saves
+- `tool_calls_since_save` — auto-save cooldown counter (≥10 triggers save)
+- `auto_save_count` — total auto-saves in current session
+- `trigger_reason` — why the last save was triggered
+- `pressure_state` — GREEN/YELLOW/RED with dynamic thresholds
+- `growth_rate` / `complexity` — multipliers for adaptive threshold calculation
+- `estimated_tokens_ratio` — estimated context fill ratio (updated after every tool call)
+
+#### Pressure Level Actions
+
+| Level | Action | User Notification |
+|-------|--------|-------------------|
+| GREEN | None | None |
+| YELLOW | Silent L1 save (or L1+L2 if high-value content exists) | Brief: "Context pressure rising. MindSave auto-checkpoint saved." |
+| RED | Emergency L1 save + session interrupt | Urgent: "⚠️ Context overflow imminent. Auto-saved. Start new conversation with /load." |
+
+### Self-Check Protocol
+
+After **every tool call**, the AI MUST:
+
+1. Estimate current `token_ratio` (approximate, no exact calculation needed)
+2. Estimate `growth_rate` from recent tool call frequency
+3. Estimate `complexity` from active file count + decision count
+4. Calculate effective WARNING and CRITICAL thresholds
+5. Determine current pressure level (GREEN / YELLOW / RED)
+6. Act accordingly (see Pressure Level Actions above)
+
+**This replaces the old fixed 80% rule.** The adaptive system ensures fast-growing, complex sessions save earlier, while quiet sessions avoid unnecessary interruptions.
+
+## Auto-Trigger Rules (Proactive Save)
+
+MindSave does NOT only respond to explicit commands. The AI MUST proactively monitor these signals and auto-save without user prompting:
+
+### Signal-Based Triggers
+
+After **every tool call**, self-check these conditions. If ANY fires, silently save:
+
+| Signal | Threshold | Save Layers | Why |
+|--------|-----------|-------------|-----|
+| Tool call count | ≥10 tool calls since last save | L1 only | Context growing fast |
+| Sub-task completed | A verifiable sub-task just finished | L1 only | Natural checkpoint |
+| Error recovered | Failed 2+ times, then succeeded | L1 only | Lesson learned worth preserving |
+| User says "done"/"结束"/"先这样" | Immediate | L1+L2 | Session ending, capture all |
+| Key decision made | Architecture choice, API selection, approach picked | L1+L2 | High-value Layer 2 content |
+| User corrects AI | "不对", "不是这样", "我说的是" | L1+L2 | Constraint discovered |
+
+### Self-Monitoring Loop
+
+After completing any multi-step task (8+ tool calls), the AI MUST:
+
+1. Count approximate tool calls in this session
+2. Check if any Layer 2 content has emerged (constraints, decisions, excluded_paths)
+3. If threshold met OR high-value content exists → execute silent Layer 1 save
+4. Log the auto-save reason in the snapshot's `state` field
+
+### What NOT to Auto-Save
+
+- Casual conversation with no task progress
+- Simple questions/answers (Q&A only)
+- When user explicitly said "don't save" or "不需要保存"
+- When the session just started and no work has been done
 
 ## Information Density Principles
 
@@ -185,3 +365,12 @@ excluded_paths:
 ```
 
 **Storage isolation**: All MindSave files live under `.mindsave/`. Never mix with MEMORY.md or other identity files.
+
+## Snapshot Cleanup
+
+Snapshots accumulate over time. On every `/save`, perform a lightweight cleanup:
+
+1. **Max snapshots**: Keep at most **20** snapshots. If exceeded, delete the oldest (by `created_at`).
+2. **Auto-archive**: Snapshots older than **30 days** with `status: completed` can be safely deleted during cleanup.
+3. **Never delete**: Snapshots with `status: in_progress` or `blocker` != "none" — they may still be needed.
+4. Update `index.json` after any deletion.

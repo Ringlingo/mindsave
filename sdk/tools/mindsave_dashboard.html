@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MindSave Dashboard — 快照可视化</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #181b24;
+    --border: #2a2e3a;
+    --text: #e4e7ec;
+    --text-muted: #8b8fa3;
+    --accent: #6366f1;
+    --accent-dim: #4338ca;
+    --l1: #34d399;
+    --l2: #fbbf24;
+    --l3: #64748b;
+    --done: #34d399;
+    --failed: #f87171;
+    --pending: #94a3b8;
+    --surface: #1e2130;
+    --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── Top bar ────────────────────────────────────────────── */
+  .topbar {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .topbar .logo { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .topbar .logo span { color: var(--accent); }
+  .topbar .sep { width: 1px; height: 24px; background: var(--border); }
+  .topbar .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: none; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-dim); }
+  .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-muted); }
+  .btn-ghost.active { color: var(--accent); border-color: var(--accent); background: rgba(99,102,241,0.1); }
+  .file-label { font-size: 12px; color: var(--text-muted); }
+  input[type="file"] { display: none; }
+
+  /* ── Main layout ────────────────────────────────────────── */
+  .main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+  /* ── Stats strip ────────────────────────────────────────── */
+  .stats-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px;
+  }
+  .stat {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; position: relative; overflow: hidden;
+  }
+  .stat::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--accent); opacity: 0.6;
+  }
+  .stat.green::before { background: var(--done); }
+  .stat.yellow::before { background: var(--l2); }
+  .stat.red::before { background: var(--failed); }
+  .stat .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .stat .value { font-size: 26px; font-weight: 700; }
+  .stat .sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ── Grid ───────────────────────────────────────────────── */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .card-head {
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .card-head h2 { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 500; }
+  .badge-green { background: rgba(52,211,153,0.15); color: var(--done); }
+  .badge-yellow { background: rgba(251,191,36,0.15); color: var(--l2); }
+  .badge-red { background: rgba(248,113,113,0.15); color: var(--failed); }
+  .badge-default { background: rgba(99,102,241,0.12); color: var(--accent); }
+  .card-body { padding: 16px 18px; flex: 1; }
+
+  /* ── Timeline ────────────────────────────────────────────── */
+  .timeline { position: relative; }
+  .timeline::before {
+    content: ""; position: absolute; left: 15px; top: 12px; bottom: 12px;
+    width: 2px; background: var(--border); border-radius: 2px;
+  }
+  .tl-item { position: relative; padding-left: 44px; padding-bottom: 22px; }
+  .tl-item:last-child { padding-bottom: 0; }
+  .tl-dot {
+    position: absolute; left: 8px; top: 6px; width: 16px; height: 16px;
+    border-radius: 50%; border: 3px solid var(--bg);
+  }
+  .tl-dot.ok { background: var(--done); box-shadow: 0 0 8px rgba(52,211,153,0.4); }
+  .tl-dot.warn { background: var(--l2); box-shadow: 0 0 8px rgba(251,191,36,0.4); }
+  .tl-dot.err { background: var(--failed); box-shadow: 0 0 8px rgba(248,113,113,0.4); }
+  .tl-time { font-size: 11px; color: var(--text-muted); margin-bottom: 3px; font-family: monospace; }
+  .tl-goal { font-size: 14px; font-weight: 600; margin-bottom: 4px; line-height: 1.4; }
+  .tl-state { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  .tl-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tl-tag { font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--surface); color: var(--text-muted); }
+  .tl-tag.l1 { color: var(--l1); background: rgba(52,211,153,0.1); }
+  .tl-tag.l2 { color: var(--l2); background: rgba(251,191,36,0.1); }
+  .tl-tag.l3 { color: var(--l3); background: rgba(100,116,139,0.15); }
+  .tl-tag.blocker { color: var(--failed); background: rgba(248,113,113,0.1); }
+  .tl-empty { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; }
+
+  /* ── Pie + Gauge ─────────────────────────────────────────── */
+  .chart-row { display: flex; gap: 24px; align-items: center; }
+  .pie-wrap { flex-shrink: 0; position: relative; }
+  .pie-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+  .pie-center .big { font-size: 22px; font-weight: 700; }
+  .pie-center .small { font-size: 11px; color: var(--text-muted); }
+  .legend-col { display: flex; flex-direction: column; gap: 10px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .legend-label { color: var(--text-muted); min-width: 80px; }
+  .legend-val { font-weight: 600; min-width: 30px; text-align: right; }
+  .legend-pct { color: var(--text-muted); font-size: 12px; min-width: 36px; text-align: right; }
+
+  .gauge-wrap { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .gauge-title { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; font-weight: 500; }
+  .gauge-label { font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 8px; }
+
+  /* ── Execution graph (custom SVG) ────────────────────────── */
+  .exec-scroll { overflow-x: auto; }
+  .exec-empty { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; }
+
+  /* ── Table ───────────────────────────────────────────────── */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th {
+    text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tbl td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .tbl tr:last-child td { border-bottom: none; }
+  .tbl .mono { font-family: monospace; font-size: 12px; color: var(--accent); }
+  .tbl .muted { color: var(--text-muted); font-size: 12px; }
+  .pill { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 4px; font-weight: 500; }
+  .pill-ok { background: rgba(52,211,153,0.12); color: var(--done); }
+  .pill-warn { background: rgba(251,191,36,0.12); color: var(--l2); }
+  .pill-err { background: rgba(248,113,113,0.12); color: var(--failed); }
+
+  /* ── Drag-drop zone ──────────────────────────────────────── */
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: 14px; padding: 40px 20px;
+    text-align: center; color: var(--text-muted); font-size: 14px;
+    transition: border-color 0.2s, background 0.2s; cursor: pointer;
+    margin-bottom: 24px;
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: var(--accent); background: rgba(99,102,241,0.05);
+  }
+  .dropzone .icon { font-size: 32px; margin-bottom: 8px; }
+  .dropzone .hint { font-size: 12px; margin-top: 8px; color: var(--text-muted); }
+
+  /* ── Responsive ──────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr; }
+    .stats-strip { grid-template-columns: repeat(2, 1fr); }
+    .chart-row { flex-direction: column; }
+    .topbar { padding: 10px 16px; }
+    .main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────── -->
+<div class="topbar">
+  <div class="logo">🧠 <span>MindSave</span> Dashboard</div>
+  <div class="sep"></div>
+  <div class="controls">
+    <button class="btn btn-primary" onclick="loadSampleData()">📊 加载示例</button>
+    <label class="btn btn-ghost" style="margin:0">
+      📂 选择 index.json
+      <input type="file" id="fileIndex" accept=".json" onchange="handleFileLoad()">
+    </label>
+    <label class="btn btn-ghost" style="margin:0">
+      📁 选择 .mindsave 目录
+      <input type="file" id="fileDir" webkitdirectory onchange="handleDirLoad(this)">
+    </label>
+  </div>
+  <span class="file-label" id="sourceLabel">未加载数据</span>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────── -->
+<div class="main" id="mainArea">
+
+  <!-- Drop zone (shown when no data) -->
+  <div class="dropzone" id="dropzone" onclick="loadSampleData()"
+       ondragover="event.preventDefault();this.classList.add('dragover')"
+       ondragleave="this.classList.remove('dragover')"
+       ondrop="event.preventDefault();this.classList.remove('dragover');handleDrop(event)">
+    <div class="icon">📂</div>
+    拖入 <code>.mindsave/</code> 目录 或 <code>index.json</code> 文件
+    <div class="hint">也可以点击上方按钮选择文件，或点击此处加载示例数据</div>
+  </div>
+
+  <!-- Stats (hidden until data loaded) -->
+  <div class="stats-strip" id="statsStrip" style="display:none">
+    <div class="stat" id="statSnap">
+      <div class="label">快照总数</div>
+      <div class="value" id="vTotal">0</div>
+      <div class="sub">snapshots</div>
+    </div>
+    <div class="stat">
+      <div class="label">L2 有内容</div>
+      <div class="value" id="vL2">0</div>
+      <div class="sub">含 constraints/decisions/excluded</div>
+    </div>
+    <div class="stat">
+      <div class="label">活跃 Blocker</div>
+      <div class="value" id="vBlockers">0</div>
+      <div class="sub">需要关注</div>
+    </div>
+    <div class="stat" id="statPressure">
+      <div class="label">压力状态</div>
+      <div class="value" id="vPressure" style="font-size:20px">GREEN</div>
+      <div class="sub" id="vThresholds">—</div>
+    </div>
+  </div>
+
+  <!-- Grid (hidden until data loaded) -->
+  <div class="grid" id="grid" style="display:none">
+
+    <!-- Timeline -->
+    <div class="card">
+      <div class="card-head">
+        <h2>📋 快照时间线</h2>
+        <span class="badge badge-default" id="bTimeline">0</span>
+      </div>
+      <div class="card-body" style="max-height:420px;overflow-y:auto">
+        <div class="timeline" id="timeline"></div>
+      </div>
+    </div>
+
+    <!-- Token Ratio + Gauge -->
+    <div class="card">
+      <div class="card-head">
+        <h2>📊 三层 Token 预算</h2>
+        <span class="badge badge-default" id="bPie">—</span>
+      </div>
+      <div class="card-body">
+        <div class="chart-row">
+          <div class="pie-wrap">
+            <svg id="pieSvg" width="160" height="160" viewBox="0 0 160 160"></svg>
+            <div class="pie-center">
+              <div class="big" id="pieTotal">≤800</div>
+              <div class="small">tokens 恢复上限</div>
+            </div>
+          </div>
+          <div class="legend-col" id="legendCol"></div>
+        </div>
+        <div class="gauge-wrap" id="gaugeWrap">
+          <div class="gauge-title">上下文压力仪表</div>
+          <svg id="gaugeSvg" width="260" height="130" viewBox="0 0 260 130" style="display:block;margin:0 auto"></svg>
+          <div class="gauge-label" id="gaugeLabel"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Execution Graph -->
+    <div class="card">
+      <div class="card-head">
+        <h2>🔗 执行图</h2>
+        <span class="badge badge-default" id="bGraph">0 steps</span>
+      </div>
+      <div class="card-body">
+        <div class="exec-scroll" id="execWrap"></div>
+      </div>
+    </div>
+
+    <!-- Snapshot Table -->
+    <div class="card">
+      <div class="card-head">
+        <h2>📦 快照详情</h2>
+        <span class="badge badge-default" id="bTable">0</span>
+      </div>
+      <div class="card-body" style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>ID</th><th>Goal</th><th>State</th><th>Next</th><th>Layers</th><th>Blocker</th></tr></thead>
+          <tbody id="tBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// State
+// ════════════════════════════════════════════════════════════════
+let snapshots = [];
+let signal = null;
+let toolEntries = []; // flat list of tool call entries
+
+// ════════════════════════════════════════════════════════════════
+// Data loading strategies
+// ════════════════════════════════════════════════════════════════
+
+/** Strategy 1: User picks index.json + optionally signal.json + snapshots */
+async function handleFileLoad() {
+  const file = document.getElementById('fileIndex').files[0];
+  if (!file) return;
+  try {
+    const indexData = JSON.parse(await file.text());
+    snapshots = indexData.snapshots || [];
+    document.getElementById('sourceLabel').textContent = file.name;
+    showData();
+  } catch(e) {
+    alert('读取失败: ' + e.message);
+  }
+}
+
+/** Strategy 2: User picks a directory — we get all files */
+function handleDirLoad(input) {
+  const files = input.files;
+  if (!files.length) return;
+  const fileMap = {};
+  for (const f of files) {
+    fileMap[f.name] = f;
+    // also index by relative path parts
+    const parts = f.webkitRelativePath.split('/');
+    if (parts.length > 1) fileMap[parts.slice(1).join('/')] = f;
+  }
+
+  // Find index.json
+  const idxFile = fileMap['index.json'] || fileMap['.mindsave/index.json'];
+  if (!idxFile) { alert('未找到 index.json，请确认选择了 .mindsave 目录'); return; }
+
+  idxFile.text().then(txt => {
+    const idx = JSON.parse(txt);
+    snapshots = idx.snapshots || [];
+
+    // Find signal.json
+    const sigFile = fileMap['signal.json'] || fileMap['.mindsave/signal.json'];
+    if (sigFile) {
+      sigFile.text().then(t => { try { signal = JSON.parse(t); } catch{} showData(); });
+    } else {
+      showData();
+    }
+
+    // Find tool_logs
+    toolEntries = [];
+    for (const [path, f] of Object.entries(fileMap)) {
+      if (path.includes('tool_logs') && path.endsWith('.jsonl')) {
+        f.text().then(t => {
+          t.trim().split('\n').forEach(line => {
+            try { toolEntries.push(JSON.parse(line)); } catch{}
+          });
+          renderExecGraph();
+        });
+      }
+    }
+
+    // Find snapshot contents for L2 extraction
+    for (const [path, f] of Object.entries(fileMap)) {
+      if (path.includes('snapshots') && path.endsWith('.md')) {
+        f.text().then(content => {
+          const parsed = parseMd(content);
+          const snap = snapshots.find(s => s.id === parsed.snapshot_id || (s.path && s.path.includes(parsed.snapshot_id)));
+          if (snap) Object.assign(snap, parsed);
+          renderAll();
+        });
+      }
+    }
+
+    document.getElementById('sourceLabel').textContent = '已加载目录';
+    showData();
+  }).catch(e => alert('读取失败: ' + e.message));
+}
+
+/** Strategy 3: Drag and drop */
+function handleDrop(e) {
+  const items = e.dataTransfer.items;
+  if (!items || !items.length) return;
+
+  // Try to get directory entry
+  const entry = items[0].webkitGetAsEntry ? items[0].webkitGetAsEntry() : null;
+  if (entry && entry.isDirectory) {
+    // Read directory recursively
+    const reader = entry.createReader();
+    reader.readEntries(entries => {
+      let idxFile = null, sigFile = null;
+      const snapshotFiles = [];
+      const logFiles = [];
+
+      function processEntries(entries) {
+        for (const e of entries) {
+          if (e.isFile) {
+            e.file(f => {
+              if (f.name === 'index.json') idxFile = f;
+              if (f.name === 'signal.json') sigFile = f;
+              if (f.name.endsWith('.md')) snapshotFiles.push(f);
+              if (f.name.endsWith('.jsonl')) logFiles.push(f);
+            });
+          } else if (e.isDirectory) {
+            e.createReader().readEntries(processEntries);
+          }
+        }
+      }
+      processEntries(entries);
+
+      // Wait a tick for async file reads, then process
+      setTimeout(async () => {
+        if (idxFile) {
+          const idx = JSON.parse(await idxFile.text());
+          snapshots = idx.snapshots || [];
+        }
+        if (sigFile) {
+          try { signal = JSON.parse(await sigFile.text()); } catch{}
+        }
+        toolEntries = [];
+        for (const lf of logFiles) {
+          const txt = await lf.text();
+          txt.trim().split('\n').forEach(line => { try { toolEntries.push(JSON.parse(line)); } catch{} });
+        }
+        document.getElementById('sourceLabel').textContent = '已拖入目录';
+        showData();
+      }, 300);
+    });
+  } else {
+    // Single file drop
+    const f = e.dataTransfer.files[0];
+    if (f && f.name === 'index.json') {
+      f.text().then(t => {
+        snapshots = JSON.parse(t).snapshots || [];
+        document.getElementById('sourceLabel').textContent = f.name;
+        showData();
+      });
+    }
+  }
+}
+
+/** Strategy 4: Built-in sample data */
+function loadSampleData() {
+  snapshots = [
+    {
+      id: 'auth_flow_20260510', created_at: '2026-05-10T09:15:00+08:00',
+      goal: 'Implement JWT authentication with refresh token rotation',
+      state: 'Debugging refresh token invalidation on mobile',
+      next_action: 'Add token expiry check in useAuth hook',
+      active_files: ['src/hooks/useAuth.ts', 'src/lib/token.ts'],
+      blocker: 'none', layers: ['L1','L2','L3'],
+      constraints: ['No external auth service', 'Use httpOnly cookies'],
+      decisions: ['Access token: 15min, Refresh: 7d with rotation'],
+      excluded_paths: ['localStorage for tokens — XSS risk', 'Single long-lived token — security risk'],
+    },
+    {
+      id: 'fix_layout_20260509', created_at: '2026-05-09T14:30:00+08:00',
+      goal: 'Fix mobile layout break on login page',
+      state: 'Completed — verified in iOS Safari',
+      next_action: 'none',
+      active_files: ['src/styles/login.css'],
+      blocker: 'none', layers: ['L1','L2'],
+      constraints: ['Must work on iOS Safari 16'],
+      decisions: ['Use CSS Grid instead of Flexbox for form layout'],
+      excluded_paths: ['Flexbox layout — Safari 16 rendering bug'],
+    },
+    {
+      id: 'api_migration_20260508', created_at: '2026-05-08T16:45:00+08:00',
+      goal: 'Migrate from REST to GraphQL API',
+      state: 'Blocked — schema design disagreement',
+      next_action: 'Resolve GraphQL schema design with backend team',
+      active_files: ['src/api/client.ts', 'schema.graphql'],
+      blocker: 'Waiting for backend team schema decision',
+      layers: ['L1'], constraints: [], decisions: [], excluded_paths: [],
+    },
+    {
+      id: 'perf_audit_20260507', created_at: '2026-05-07T11:00:00+08:00',
+      goal: 'Performance audit for dashboard page',
+      state: 'Analyzing bundle size',
+      next_action: 'Implement code splitting for chart components',
+      active_files: ['src/pages/Dashboard.tsx', 'src/components/Chart.tsx'],
+      blocker: 'none', layers: ['L1','L2'],
+      constraints: ['First load < 2s on 3G'],
+      decisions: ['Use dynamic import for heavy chart libs'],
+      excluded_paths: ['Import entire lodash — use lodash-es instead'],
+    },
+  ];
+
+  signal = {
+    pressure_state: 'YELLOW',
+    thresholds: { warning: 0.57, critical: 0.76 },
+    growth_rate: 'normal', complexity: 'medium',
+    estimated_tokens_ratio: 0.65,
+    last_save: '2026-05-10T09:15:00+08:00',
+  };
+
+  toolEntries = [
+    { timestamp: '2026-05-10T09:00:00+08:00', action: 'Read', target: 'src/hooks/useAuth.ts', summary: 'Read auth hook', status: 'done' },
+    { timestamp: '2026-05-10T09:01:30+08:00', action: 'Write', target: 'src/lib/token.ts', summary: 'Create JWT utility', status: 'done' },
+    { timestamp: '2026-05-10T09:02:45+08:00', action: 'Edit', target: 'src/hooks/useAuth.ts', summary: 'Add token refresh on 401', status: 'done' },
+    { timestamp: '2026-05-10T09:04:00+08:00', action: 'Bash', target: 'npm run build', summary: 'Build project', status: 'failed' },
+    { timestamp: '2026-05-10T09:05:30+08:00', action: 'Edit', target: 'src/lib/token.ts', summary: 'Fix TypeScript type error', status: 'done' },
+    { timestamp: '2026-05-10T09:06:00+08:00', action: 'Bash', target: 'npm run test', summary: 'Run auth tests', status: 'pending' },
+  ];
+
+  document.getElementById('sourceLabel').textContent = '(示例数据)';
+  showData();
+}
+
+function showData() {
+  document.getElementById('dropzone').style.display = 'none';
+  document.getElementById('statsStrip').style.display = 'grid';
+  document.getElementById('grid').style.display = 'grid';
+  renderAll();
+}
+
+// ════════════════════════════════════════════════════════════════
+// MD Parser
+// ════════════════════════════════════════════════════════════════
+function parseMd(content) {
+  if (!content) return {};
+  const r = { snapshot_id:'', goal:'', state:'', next_action:'', blocker:'none', active_files:[], constraints:[], decisions:[], excluded_paths:[] };
+
+  // Extract YAML front matter fields
+  const extractKV = (key) => {
+    const m = content.match(new RegExp(`^${key}:\\s*"?(.+?)"?\\s*$`, 'm'));
+    return m ? m[1].replace(/"/g,'').trim() : '';
+  };
+  r.snapshot_id = extractKV('snapshot_id');
+  r.goal = extractKV('goal');
+  r.state = extractKV('state');
+  r.next_action = extractKV('next_action');
+  r.blocker = extractKV('blocker') || 'none';
+
+  // Extract list fields
+  const extractList = (key) => {
+    const re = new RegExp(`^${key}:\\s*\\n((?:\\s+-\\s+.*\\n)*)`, 'm');
+    const m = content.match(re);
+    if (!m) return [];
+    return m[1].trim().split('\n').map(l => l.replace(/^\s+-\s+/, '').replace(/"/g, '').trim()).filter(Boolean);
+  };
+  r.active_files = extractList('active_files');
+  r.constraints = extractList('constraints');
+  r.decisions = extractList('decisions');
+  r.excluded_paths = extractList('excluded_paths');
+  r.layers = (r.constraints.length || r.decisions.length || r.excluded_paths.length) ? ['L1','L2'] : ['L1'];
+
+  return r;
+}
+
+// ════════════════════════════════════════════════════════════════
+// Rendering
+// ════════════════════════════════════════════════════════════════
+function renderAll() {
+  renderStats();
+  renderTimeline();
+  renderPie();
+  renderGauge();
+  renderExecGraph();
+  renderTable();
+}
+
+// ── Stats ──────────────────────────────────────────────────────
+function renderStats() {
+  document.getElementById('vTotal').textContent = snapshots.length;
+  const l2count = snapshots.filter(s => (s.constraints?.length || s.decisions?.length || s.excluded_paths?.length)).length;
+  document.getElementById('vL2').textContent = l2count;
+  const blockers = snapshots.filter(s => s.blocker && s.blocker !== 'none').length;
+  document.getElementById('vBlockers').textContent = blockers;
+
+  const p = signal?.pressure_state || 'GREEN';
+  const ve = document.getElementById('vPressure');
+  ve.textContent = p;
+  ve.style.color = p === 'GREEN' ? 'var(--done)' : p === 'YELLOW' ? 'var(--l2)' : 'var(--failed)';
+  document.getElementById('statPressure').className = 'stat ' + (p === 'GREEN' ? 'green' : p === 'YELLOW' ? 'yellow' : 'red');
+
+  if (signal?.thresholds) {
+    document.getElementById('vThresholds').textContent =
+      `W:${(signal.thresholds.warning*100).toFixed(0)}% C:${(signal.thresholds.critical*100).toFixed(0)}%`;
+  }
+}
+
+// ── Timeline ───────────────────────────────────────────────────
+function renderTimeline() {
+  const el = document.getElementById('timeline');
+  document.getElementById('bTimeline').textContent = snapshots.length + ' snapshots';
+  if (!snapshots.length) { el.innerHTML = '<div class="tl-empty">暂无快照</div>'; return; }
+
+  el.innerHTML = snapshots.map(s => {
+    const dot = s.blocker && s.blocker !== 'none' ? 'err' : 'ok';
+    const time = fmtDt(s.created_at);
+    const layers = s.layers || ['L1'];
+    const layerTags = layers.map(l => `<span class="tl-tag ${l.toLowerCase()}">${l}</span>`).join('');
+    const blockerTag = s.blocker && s.blocker !== 'none' ? `<span class="tl-tag blocker">⚠ ${esc(s.blocker)}</span>` : '';
+    const fileCount = s.active_files?.length || 0;
+    return `<div class="tl-item">
+      <div class="tl-dot ${dot}"></div>
+      <div class="tl-time">${time}</div>
+      <div class="tl-goal">${esc(s.goal || s.id)}</div>
+      <div class="tl-state">${esc(s.state || '')}</div>
+      <div class="tl-tags">
+        ${layerTags}
+        <span class="tl-tag">📁 ${fileCount}</span>
+        ${s.constraints?.length ? `<span class="tl-tag l2">🔒${s.constraints.length}</span>` : ''}
+        ${s.excluded_paths?.length ? `<span class="tl-tag l2">🚫${s.excluded_paths.length}</span>` : ''}
+        ${blockerTag}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Pie (Token Budget) ─────────────────────────────────────────
+function renderPie() {
+  const svg = document.getElementById('pieSvg');
+  const legend = document.getElementById('legendCol');
+
+  // Token budgets: L1=300, L2=500, L3=unlimited (show as 1000 for chart)
+  const data = [
+    { label: 'L1 执行寄存器', budget: 300, color: '#34d399' },
+    { label: 'L2 认知缓存', budget: 500, color: '#fbbf24' },
+    { label: 'L3 冷存档', budget: 1000, color: '#64748b' },
+  ];
+  const total = data.reduce((s,d) => s + d.budget, 0);
+
+  document.getElementById('bPie').textContent = `≤${total} tok`;
+
+  // Donut chart
+  const cx = 80, cy = 80, R = 65, IR = 42;
+  let angle = -90;
+  const paths = [];
+
+  data.forEach(d => {
+    const sweep = (d.budget / total) * 360;
+    const end = angle + sweep;
+    const lg = sweep > 180 ? 1 : 0;
+    const rad = a => a * Math.PI / 180;
+
+    const x1 = cx + R * Math.cos(rad(angle)), y1 = cy + R * Math.sin(rad(angle));
+    const x2 = cx + R * Math.cos(rad(end)),   y2 = cy + R * Math.sin(rad(end));
+    const ix1 = cx + IR * Math.cos(rad(angle)), iy1 = cy + IR * Math.sin(rad(angle));
+    const ix2 = cx + IR * Math.cos(rad(end)),   iy2 = cy + IR * Math.sin(rad(end));
+
+    paths.push(`<path d="M${x1} ${y1} A${R} ${R} 0 ${lg} 1 ${x2} ${y2} L${ix2} ${iy2} A${IR} ${IR} 0 ${lg} 0 ${ix1} ${iy1} Z" fill="${d.color}" opacity="0.85"/>`);
+    angle = end;
+  });
+
+  svg.innerHTML = paths.join('');
+
+  legend.innerHTML = data.map(d => {
+    const pct = Math.round(d.budget / total * 100);
+    return `<div class="legend-row">
+      <div class="legend-swatch" style="background:${d.color}"></div>
+      <span class="legend-label">${d.label}</span>
+      <span class="legend-val">≤${d.budget}</span>
+      <span class="legend-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Gauge ──────────────────────────────────────────────────────
+function renderGauge() {
+  const wrap = document.getElementById('gaugeWrap');
+  const svg = document.getElementById('gaugeSvg');
+  const label = document.getElementById('gaugeLabel');
+
+  if (!signal) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  const ratio = signal.estimated_tokens_ratio ?? 0;
+  const wTh = signal.thresholds?.warning ?? 0.6;
+  const cTh = signal.thresholds?.critical ?? 0.8;
+  const state = signal.pressure_state || 'GREEN';
+
+  const cx = 130, cy = 105, R = 85;
+  // Semi-circle from 180° (left) to 0° (right)
+  const rad = a => a * Math.PI / 180;
+
+  // Background arc
+  const bgX1 = cx - R, bgY1 = cy;
+  const bgX2 = cx + R, bgY2 = cy;
+  let inner = `<path d="M${bgX1} ${bgY1} A${R} ${R} 0 0 1 ${bgX2} ${bgY2}" fill="none" stroke="#2a2e3a" stroke-width="14" stroke-linecap="round"/>`;
+
+  // Warning zone (from W threshold to C threshold)
+  const wAngle = 180 - wTh * 180;
+  const cAngle = 180 - cTh * 180;
+  const wX = cx + R * Math.cos(rad(wAngle)), wY = cy - R * Math.sin(rad(wAngle));
+  const cX = cx + R * Math.cos(rad(cAngle)), cY = cy - R * Math.sin(rad(cAngle));
+  const wLarge = (cTh - wTh) > 0.5 ? 1 : 0;
+  inner += `<path d="M${wX} ${wY} A${R} ${R} 0 ${wLarge} 1 ${cX} ${cY}" fill="none" stroke="rgba(251,191,36,0.3)" stroke-width="14" stroke-linecap="round"/>`;
+
+  // Critical zone (from C threshold to right end)
+  inner += `<path d="M${cX} ${cY} A${R} ${R} 0 0 1 ${bgX2} ${bgY2}" fill="none" stroke="rgba(248,113,113,0.3)" stroke-width="14" stroke-linecap="round"/>`;
+
+  // Ratio fill
+  if (ratio > 0) {
+    const rAngle = 180 - ratio * 180;
+    const rX = cx + R * Math.cos(rad(rAngle)), rY = cy - R * Math.sin(rad(rAngle));
+    const rLarge = 0; // semicircle arc is always ≤ 180°
+    const color = state === 'GREEN' ? '#34d399' : state === 'YELLOW' ? '#fbbf24' : '#f87171';
+    inner += `<path d="M${bgX1} ${bgY1} A${R} ${R} 0 ${rLarge} 1 ${rX} ${rY}" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/>`;
+
+    // Needle dot
+    inner += `<circle cx="${rX}" cy="${rY}" r="5" fill="${color}" stroke="var(--bg)" stroke-width="2"/>`;
+  }
+
+  // Labels
+  inner += `<text x="${cx}" y="${cy - 10}" text-anchor="middle" font-size="28" font-weight="700" fill="${state === 'GREEN' ? '#34d399' : state === 'YELLOW' ? '#fbbf24' : '#f87171'}">${Math.round(ratio * 100)}%</text>`;
+  inner += `<text x="${cx}" y="${cy + 12}" text-anchor="middle" font-size="13" fill="#8b8fa3">${state}</text>`;
+  inner += `<text x="${cx - R - 5}" y="${cy + 18}" text-anchor="middle" font-size="10" fill="#8b8fa3">0%</text>`;
+  inner += `<text x="${cx + R + 5}" y="${cy + 18}" text-anchor="middle" font-size="10" fill="#8b8fa3">100%</text>`;
+
+  svg.innerHTML = inner;
+  label.innerHTML = `W: ${(wTh*100).toFixed(0)}%&ensp;|&ensp;C: ${(cTh*100).toFixed(0)}%&ensp;|&ensp;${signal.growth_rate || '—'} / ${signal.complexity || '—'}`;
+}
+
+// ── Execution Graph (custom SVG, no Mermaid dependency) ─────────
+function renderExecGraph() {
+  const wrap = document.getElementById('execWrap');
+  document.getElementById('bGraph').textContent = toolEntries.length + ' steps';
+
+  if (!toolEntries.length) {
+    wrap.innerHTML = '<div class="exec-empty">暂无执行图数据<br><small style="color:var(--text-muted)">tool_logs/*.jsonl 文件将生成执行图</small></div>';
+    return;
+  }
+
+  const W = 600, nodeH = 36, gap = 16, padX = 20, padY = 16;
+  const entries = toolEntries;
+  const totalH = padY * 2 + entries.length * (nodeH + gap) - gap;
+
+  const statusColor = { done: '#34d399', failed: '#f87171', pending: '#64748b' };
+  const statusBg = { done: 'rgba(52,211,153,0.1)', failed: 'rgba(248,113,113,0.1)', pending: 'rgba(100,116,139,0.1)' };
+  const statusIcon = { done: '✓', failed: '✗', pending: '…' };
+
+  let svg = `<svg width="100%" height="${totalH}" viewBox="0 0 ${W} ${totalH}" xmlns="http://www.w3.org/2000/svg">`;
+  // Background
+  svg += `<rect width="${W}" height="${totalH}" rx="8" fill="var(--surface)"/>`;
+
+  entries.forEach((e, i) => {
+    const y = padY + i * (nodeH + gap);
+    const status = e.status || 'done';
+    const color = statusColor[status];
+    const bg = statusBg[status];
+    const icon = statusIcon[status];
+    const label = `${e.action} ${((e.target || '').split('/').pop() || '').slice(0, 22)}`;
+    const summary = (e.summary || '').slice(0, 50);
+
+    // Connector line
+    if (i > 0) {
+      svg += `<line x1="${padX + 16}" y1="${y - gap}" x2="${padX + 16}" y2="${y}" stroke="var(--border)" stroke-width="2"/>`;
+    }
+
+    // Status circle
+    svg += `<circle cx="${padX + 16}" cy="${y + nodeH/2}" r="12" fill="${bg}" stroke="${color}" stroke-width="2"/>`;
+    svg += `<text x="${padX + 16}" y="${y + nodeH/2 + 5}" text-anchor="middle" font-size="12" font-weight="700" fill="${color}">${icon}</text>`;
+
+    // Label
+    svg += `<text x="${padX + 38}" y="${y + 15}" font-size="13" font-weight="600" fill="var(--text)">${esc(label)}</text>`;
+    if (summary) {
+      svg += `<text x="${padX + 38}" y="${y + 30}" font-size="11" fill="var(--text-muted)">${esc(summary)}</text>`;
+    }
+  });
+
+  svg += '</svg>';
+  wrap.innerHTML = svg;
+}
+
+// ── Table ──────────────────────────────────────────────────────
+function renderTable() {
+  const tbody = document.getElementById('tBody');
+  document.getElementById('bTable').textContent = snapshots.length;
+
+  if (!snapshots.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">暂无数据</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = snapshots.map(s => {
+    const layers = (s.layers || ['L1']).map(l => `<span class="tl-tag ${l.toLowerCase()}">${l}</span>`).join(' ');
+    const bClass = s.blocker && s.blocker !== 'none' ? 'pill-err' : 'pill-ok';
+    const bText = s.blocker && s.blocker !== 'none' ? esc(s.blocker).slice(0,30) : '—';
+    return `<tr>
+      <td class="mono">${esc(s.id)}</td>
+      <td>${esc(s.goal || '—')}</td>
+      <td class="muted">${esc(s.state || '').slice(0,40)}</td>
+      <td class="muted">${esc(s.next_action || '').slice(0,40)}</td>
+      <td>${layers}</td>
+      <td><span class="pill ${bClass}">${bText}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// Utils
+// ════════════════════════════════════════════════════════════════
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtDt(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+  catch { return iso; }
+}
+</script>
+</body>
+</html>

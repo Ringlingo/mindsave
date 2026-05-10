@@ -8,9 +8,17 @@
 !.mindsave/tool_logs/.gitkeep
 !.mindsave/tool_logs/example-session.jsonl
 
+# Runtime heartbeat (environment-specific)
+.mindsave/signal.json
+
 # Keep index and gitkeep
 !.mindsave/index.json
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc

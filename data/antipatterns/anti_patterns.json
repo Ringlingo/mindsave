@@ -1,0 +1,73 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-05-10T11:50:53.931011+00:00",
+  "total_patterns": 3,
+  "by_category": {
+    "api_client": [
+      {
+        "pattern": "localStorage for tokens — XSS vulnerability, user explicitly rejected",
+        "reason": "",
+        "count": 1,
+        "sources": [
+          "J:\\workbuddy工作区\\projects\\mindsave"
+        ],
+        "first_seen": "2026-05-10T11:50:53.930511+00:00",
+        "last_seen": "2026-05-10T11:50:53.930511+00:00"
+      },
+      {
+        "pattern": "Single long-lived token — security risk, doesn't follow best practices",
+        "reason": "",
+        "count": 1,
+        "sources": [
+          "J:\\workbuddy工作区\\projects\\mindsave"
+        ],
+        "first_seen": "2026-05-10T11:50:53.930511+00:00",
+        "last_seen": "2026-05-10T11:50:53.930511+00:00"
+      }
+    ],
+    "network_protocol": [
+      {
+        "pattern": "WebSocket-based token refresh — overcomplicates, standard HTTP works fine",
+        "reason": "",
+        "count": 1,
+        "sources": [
+          "J:\\workbuddy工作区\\projects\\mindsave"
+        ],
+        "first_seen": "2026-05-10T11:50:53.931011+00:00",
+        "last_seen": "2026-05-10T11:50:53.931011+00:00"
+      }
+    ]
+  },
+  "all_patterns": [
+    {
+      "pattern": "localStorage for tokens — XSS vulnerability, user explicitly rejected",
+      "reason": "",
+      "count": 1,
+      "sources": [
+        "J:\\workbuddy工作区\\projects\\mindsave"
+      ],
+      "first_seen": "2026-05-10T11:50:53.930511+00:00",
+      "last_seen": "2026-05-10T11:50:53.930511+00:00"
+    },
+    {
+      "pattern": "Single long-lived token — security risk, doesn't follow best practices",
+      "reason": "",
+      "count": 1,
+      "sources": [
+        "J:\\workbuddy工作区\\projects\\mindsave"
+      ],
+      "first_seen": "2026-05-10T11:50:53.930511+00:00",
+      "last_seen": "2026-05-10T11:50:53.930511+00:00"
+    },
+    {
+      "pattern": "WebSocket-based token refresh — overcomplicates, standard HTTP works fine",
+      "reason": "",
+      "count": 1,
+      "sources": [
+        "J:\\workbuddy工作区\\projects\\mindsave"
+      ],
+      "first_seen": "2026-05-10T11:50:53.931011+00:00",
+      "last_seen": "2026-05-10T11:50:53.931011+00:00"
+    }
+  ]
+}
