@@ -6,6 +6,9 @@
 
 export const SDK_VERSION = "3.4.0";
 
+// Failure Graph (imported from separate module)
+import { FailureNode, FailureGraph } from "./failure-graph";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,6 +151,7 @@ export class MindSave {
   private version: string;
   private MAX_SNAPSHOTS = 20;
   private MAX_AGE_DAYS = 30;
+  public failureGraph: FailureGraph;
 
   constructor(root: string, version = SDK_VERSION) {
     const { existsSync, mkdirSync } = require("fs") as typeof import("fs");
@@ -163,6 +167,9 @@ export class MindSave {
     if (!existsSync(this.indexPath)) {
       writeJSON(this.indexPath, { snapshots: [] });
     }
+
+    // Initialize Failure Graph
+    this.failureGraph = new FailureGraph(root);
   }
 
   // ── Public API ───────────────────────────────────────────────────────────
@@ -512,6 +519,45 @@ export class MindSave {
     this._writeIndex(index);
     this._lastCleaned = deleted;
   }
+
+  // ── Failure Graph helpers ─────────────────────────────────────
+  /**
+   * Add a failure node to the Failure Graph.
+   */
+  addFailure(
+    name: string,
+    options: {
+      rejected_by?: string;
+      reason?: string;
+      scope?: "project" | "global";
+      related?: string[];
+      alternatives?: string[];
+    } = {}
+  ): void {
+    const node = new FailureNode(name, options);
+    this.failureGraph.add(node);
+  }
+
+  /**
+   * Get a failure node from the Failure Graph.
+   */
+  getFailure(name: string, scope: "project" | "global" = "project"): FailureNode | null {
+    return this.failureGraph.get(name, scope);
+  }
+
+  /**
+   * List all failure nodes (project + global).
+   */
+  listFailures(): FailureNode[] {
+    return this.failureGraph.listAll();
+  }
+
+  /**
+   * Export the Failure Graph as a dictionary for snapshot.
+   */
+  exportFailureGraph(): Record<string, unknown> {
+    return this.failureGraph.toDict();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -519,3 +565,9 @@ export class MindSave {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default MindSave;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Failure Graph (v3.4+)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export { FailureNode, FailureGraph, migrateExcludedPaths } from "./failure-graph";

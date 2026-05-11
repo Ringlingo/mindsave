@@ -34,4 +34,4 @@ packages = ["mindsave"]
 package-dir = { "" = "sdk/python" }
 
 [project.scripts]
-mindsave = "mindsave.cli:main"
+mindsave = "mindsave.mindsave:_main_cli"

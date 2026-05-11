@@ -1,0 +1,12 @@
+{
+  "name": "mindsave-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules test-ts-sdk.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  }
+}
