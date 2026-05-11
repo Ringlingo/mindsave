@@ -13,7 +13,7 @@ read_when:
   - Any auto-trigger condition fires (see Auto-Trigger section)
 ---
 
-# MindSave v3.0 — Hierarchical Agent State System
+# MindSave v3.4 — Hierarchical Agent State System
 
 ## Core Philosophy
 
@@ -32,11 +32,12 @@ read_when:
 ├─────────────────────────────────────────────────┤
 │  Layer 2: Cognitive Cache  (optional, ≤500 tok) │
 │  Restored on demand. Reasoning shortcuts.        │
-│  constraints / decisions / excluded_paths        │
+│  constraints / decisions / failure_graph         │
 ├─────────────────────────────────────────────────┤
 │  Layer 3: Cold Archive  (write-only, unlimited) │
 │  Never auto-restored. Debug/tracing only.        │
-│  tool_logs / history_steps / file_changes        │
+│  tool_logs / history_steps / file_changes /      │
+│  execution_dag                                  │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -93,8 +94,15 @@ constraints:
   - "{constraint_1}"
 decisions:
   - "{decision_1}"
-excluded_paths:
-  - "{failed_approach_1}"
+failure_graph:
+  "{failed_item}":
+    rejected_by: "{user|system}"
+    reason: "{reason_why_failed}"
+    repeat_count: {count}
+    confidence: "{high|medium|low}"
+    scope: "{project|global}"
+    related: ["{related_item_1}", "{related_item_2}"]
+    alternatives: ["{alternative_1}", "{alternative_2}"]
 
 # Auto-trigger metadata (optional)
 auto_trigger:
@@ -336,32 +344,46 @@ When extracting Layer 2 (Cognitive Cache), prioritize by information density:
 
 **Rule of thumb**: If removing this information would cause the next session to repeat a mistake or re-explore a dead end, it belongs in Layer 2.
 
-## Failure Memory (excluded_paths)
+## Failure Graph (Negative Cognitive Memory)
 
-The `excluded_paths` field is the most valuable part of Cognitive Cache. It prevents:
+The `failure_graph` field is MindSave's most original contribution — structured memory of what NOT to do.
 
-- Re-trying failed API formats
-- Re-implementing rejected designs
-- Re-exploring dead-end debugging paths
-
-Format: one line per excluded path, with brief reason.
-
+**Current (v3.4) — flat list (legacy support):**
 ```yaml
 excluded_paths:
-  - "OpenAI compatible format — MiniMax requires native API"
-  - "WebSocket reconnect — server drops connection after 30s, switched to polling"
-  - "CSS class-based theming — user prefers CSS variables"
+  - "Don't use Tailwind — causes style conflict"
 ```
+
+**Target (v3.5+) — Failure Graph:**
+```yaml
+failure_graph:
+  Tailwind:
+    schema_version: "1.0"
+    rejected_by: user
+    reason: "causes style conflict with existing CSS"
+    repeat_count: 3
+    confidence: high
+    scope: project           # project | global (synced across platforms)
+    related: ["Bootstrap", "utility-first CSS"]
+    alternatives: ["CSS Modules", "vanilla CSS with variables"]
+```
+
+`scope` field enables cross-platform: `global` failures sync to `~/.mindsave/global/` and are loaded by every project, on every platform.
+
+**Rule of thumb:** If removing this would cause the next session — on any platform — to repeat a mistake, it belongs in failure_graph.
 
 ## Storage Structure
 
 ```
 .mindsave/
-├── index.json              # Snapshot index
-├── snapshots/              # All snapshot files (3-layer format)
-├── tool_logs/              # Tool call logs (JSONL, Layer 3 backing)
-├── workspace_snap/         # Workspace snapshots
-└── execution_graphs/       # Execution graphs
+├── index.json             # Snapshot index
+├── signal.json            # Runtime state (auto-generated)
+├── snapshots/             # All snapshot files (3-layer format)
+├── failure_graph/         # Failure Graph storage
+│   ├── project/           # Project-scoped failures
+│   └── global/            # Cross-platform failures (synced from ~/.mindsave/)
+├── tool_logs/             # Tool call logs (JSONL, L3)
+└── execution_graphs/      # Execution DAG storage
 ```
 
 **Storage isolation**: All MindSave files live under `.mindsave/`. Never mix with MEMORY.md or other identity files.

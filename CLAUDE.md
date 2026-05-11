@@ -79,16 +79,22 @@ These lightweight rituals prevent silent drift, keep the assistant aligned, and 
 
 ---
 
-## MindSave v3.0 Runtime Rules
+## MindSave v3.4 Runtime Rules
 
 ### Core Principle
 Information density > token count. Restore action-critical state, not conversation history.
 
+### Negative Cognitive Memory
+
+The most underbuilt primitive in agent infrastructure: **saving what NOT to do**.
+
+A 5-token constraint (`"no Tailwind"`) prevents more rework than 500 tokens of successful tool logs.
+
 ### Three-Layer Restore
 
 - **Layer 1 (Execution Register)**: Always restore. ≤300 tokens. Contains: goal, state, next_action, active_files, blocker.
-- **Layer 2 (Cognitive Cache)**: Restore if non-empty. ≤500 tokens. Contains: constraints, decisions, excluded_paths.
-- **Layer 3 (Cold Archive)**: Never auto-restore. Only on explicit `/recall`. Contains: tool_logs, history_steps, file_changes.
+- **Layer 2 (Cognitive Cache)**: Restore if non-empty. ≤500 tokens. Contains: constraints, decisions, failure_graph.
+- **Layer 3 (Cold Archive)**: Never auto-restore. Only on explicit `/recall`. Contains: tool_logs, history_steps, file_changes, execution_dag.
 
 ### Commands
 
@@ -108,7 +114,19 @@ Information density > token count. Restore action-critical state, not conversati
 - On `/save`, auto-extract Layer 2 from conversation:
   - User preferences → `constraints`
   - Key architectural decisions → `decisions`
-  - Failed/abandoned approaches → `excluded_paths`
+  - Failed/abandoned approaches → `failure_graph` (replaces `excluded_paths`)
+- **Failure Graph Structure (v3.5+):**
+  ```yaml
+  failure_graph:
+    Tailwind:
+      rejected_by: user
+      reason: "causes style conflict with existing CSS"
+      repeat_count: 3
+      confidence: high
+      scope: project           # project | global (synced across platforms)
+      related: ["Bootstrap", "utility-first CSS"]
+      alternatives: ["CSS Modules", "vanilla CSS with variables"]
+  ```
 - Layer 2 extraction is by information density, not by recency.
 - If no Layer 2 content exists, omit the section entirely.
 - Snapshot ID: alphanumeric + underscore only. Same-day duplicates append `-2`, `-3`, etc.
@@ -181,8 +199,36 @@ After any file modification or shell command, append to `.mindsave/tool_logs/{se
 {"timestamp":"{ISO}","action":"{tool}","target":"{file/command}","summary":"{one-line desc}"}
 ```
 
-### Storage Isolation
-All MindSave files live under `.mindsave/`. Never mix with MEMORY.md or other identity files.
+### Storage Structure
+
+```
+.mindsave/
+├── index.json             # Snapshot index
+├── signal.json            # Runtime state (auto-generated)
+├── snapshots/             # All snapshot files (3-layer format)
+├── failure_graph/         # Failure Graph storage
+│   ├── project/           # Project-scoped failures
+│   └── global/            # Cross-platform failures (synced from ~/.mindsave/)
+├── tool_logs/             # Tool call logs (JSONL, L3)
+└── execution_graphs/      # Execution DAG storage
+```
+
+**Storage isolation**: All MindSave files live under `.mindsave/`. Never mix with MEMORY.md or other identity files.
+
+---
+
+## Known Limitations
+
+MindSave is currently a **Prompt-Orchestrated Runtime** — the AI follows instructions, there are no enforced hooks yet:
+
+| Problem | Impact |
+|---------|--------|
+| Prompt compliance not enforceable | Weaker models may drift |
+| L2 extraction is AI-summarized | May miss or hallucinate constraints |
+| Constraint list can grow unbounded | Restore cost eventually exceeds benefit |
+| No deterministic runtime hooks | Hidden state cannot be captured |
+
+These are the focus of v3.5 and v3.6. See [ROADMAP.md](./ROADMAP.md).
 
 ---
 
