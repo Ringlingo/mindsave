@@ -16,7 +16,7 @@ from .mindsave import MindSave, MindSaveError, SnapshotNotFoundError
 from .failure_graph import FailureGraph, FailureNode, migrate_excluded_paths
 from .constraint_compressor import ConstraintCompressor, SymbolicConstraint, compress_layer2, find_similar_constraints
 
-__version__ = "3.4.0"
+__version__ = "3.5.0"
 
 __all__ = [
     "MindSave", "MindSaveError", "SnapshotNotFoundError",

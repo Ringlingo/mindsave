@@ -10,10 +10,10 @@ import json
 from pathlib import Path
 
 def test_all():
-    # Add project to path
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    # Add SDK to path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "sdk" / "python"))
 
-    from sdk.python import (
+    from mindsave import (
         MindSave, MindSaveError, SnapshotNotFoundError,
         FailureGraph, FailureNode, migrate_excluded_paths,
         ConstraintCompressor, compress_layer2, find_similar_constraints

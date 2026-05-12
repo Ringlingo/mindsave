@@ -19,12 +19,12 @@
 
 ```bash
 # 1. 复制运行时规则
-cp j:/workbuddy工作区/projects/mindsave/CLAUDE.md your-test-project/
-cp -r j:/workbuddy工作区/projects/mindsave/.mindsave/ your-test-project/
+cp /path/to/mindsave/CLAUDE.md your-test-project/
+cp -r /path/to/mindsave/.mindsave/ your-test-project/
 
 # 2. 复制技能文件（WorkBuddy 环境）
 mkdir -p ~/.workbuddy/skills/mindsave/
-cp j:/workbuddy工作区/projects/mindsave/SKILL.md ~/.workbuddy/skills/mindsave/SKILL.md
+cp /path/to/mindsave/SKILL.md ~/.workbuddy/skills/mindsave/SKILL.md
 
 # 3. 验证安装
 # 在 AI 助手中输入: /snapshots list
@@ -38,7 +38,7 @@ cp j:/workbuddy工作区/projects/mindsave/SKILL.md ~/.workbuddy/skills/mindsave
 ```bash
 mkdir -p /tmp/mindsave-test-project
 cd /tmp/mindsave-test-project
-cp j:/workbuddy工作区/projects/mindsave/CLAUDE.md .
+cp /path/to/mindsave/CLAUDE.md .
 mkdir -p .mindsave/snapshots .mindsave/tool_logs .mindsave/workspace_snap .mindsave/execution_graphs
 echo '{"snapshots":[]}' > .mindsave/index.json
 echo '{"last_save":null,"last_auto_save_time":null,"last_auto_save_turn":0,"tool_calls_since_save":0,"auto_save_count":0,"trigger_reason":null,"pressure_state":"GREEN","thresholds":{"warning":0.60,"critical":0.80},"growth_rate":"normal","complexity":"medium","estimated_tokens_ratio":0.0}' > .mindsave/signal.json

@@ -38,6 +38,9 @@ jobs:
       - name: Run Integration tests
         run: python tests/test_integration_fixes.py
 
+      - name: Run comprehensive v3.5 tests
+        run: python tests/test_v34_comprehensive.py
+
       - name: Build package
         run: |
           pip install build twine
@@ -78,5 +81,7 @@ jobs:
             README.md
             ROADMAP.md
             SKILL.md
+            CHANGELOG.md
+            SECURITY.md
             sdk/README.md
           config: .markdownlint.json

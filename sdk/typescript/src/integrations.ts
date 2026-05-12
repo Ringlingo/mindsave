@@ -1,6 +1,6 @@
 /**
  * MindSave Integration Adapters for Agent Frameworks
- * v3.4.0
+ * v3.5.0
  *
  * These adapters let MindSave integrate with:
  *   - LangGraph (checkpointer)

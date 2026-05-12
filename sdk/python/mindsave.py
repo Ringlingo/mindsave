@@ -29,7 +29,7 @@ except ImportError:
     from failure_graph import FailureGraph, FailureNode
     from constraint_compressor import ConstraintCompressor, compress_layer2
 
-__version__ = "3.4.0"
+__version__ = "3.5.0"
 __all__ = ["MindSave", "MindSaveError", "SnapshotNotFoundError"]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -44,11 +44,6 @@ class MindSaveError(Exception):
 
 class SnapshotNotFoundError(MindSaveError):
     """Raised when the requested snapshot does not exist."""
-    pass
-
-
-class SnapshotExistsError(MindSaveError):
-    """Raised when a duplicate snapshot would be created."""
     pass
 
 

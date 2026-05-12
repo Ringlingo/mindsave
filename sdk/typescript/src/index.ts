@@ -1,10 +1,10 @@
 /**
- * MindSave TypeScript SDK v3.4.0
+ * MindSave TypeScript SDK v3.5.0
  * Zero-dependency hierarchical state management for AI agents.
  * Provides mindsave.save() / mindsave.restore() for LangGraph, CrewAI, AutoGen, OpenHands.
  */
 
-export const SDK_VERSION = "3.4.0";
+export const SDK_VERSION = "3.5.0";
 
 // Failure Graph (imported from separate module)
 import { FailureNode, FailureGraph } from "./failure-graph";
