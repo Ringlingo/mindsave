@@ -79,7 +79,7 @@ These lightweight rituals prevent silent drift, keep the assistant aligned, and 
 
 ---
 
-## MindSave v3.4 Runtime Rules
+## MindSave v3.5 Runtime Rules
 
 ### Core Principle
 Information density > token count. Restore action-critical state, not conversation history.
@@ -127,6 +127,7 @@ A 5-token constraint (`"no Tailwind"`) prevents more rework than 500 tokens of s
       related: ["Bootstrap", "utility-first CSS"]
       alternatives: ["CSS Modules", "vanilla CSS with variables"]
   ```
+- **Constraint Compression (v3.5):** Constraints are automatically compressed using symbolic representation. Semantically similar constraints merge into symbolic entries (e.g., "no tailwind" + "avoid utility css" → `theme_system: css_variables_only`). Supports English and Chinese keywords.
 - Layer 2 extraction is by information density, not by recency.
 - If no Layer 2 content exists, omit the section entirely.
 - Snapshot ID: alphanumeric + underscore only. Same-day duplicates append `-2`, `-3`, etc.

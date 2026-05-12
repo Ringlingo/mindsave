@@ -1,6 +1,6 @@
 """
-Test MindSave v3.4 - Comprehensive Feature Test
-Verifies: Failure Graph integration, Cross-platform support, SDK exports
+Test MindSave v3.5 - Comprehensive Feature Test
+Verifies: Failure Graph integration, Constraint Compression, Cross-platform support, SDK exports
 """
 
 import sys
@@ -15,11 +15,12 @@ def test_all():
 
     from sdk.python import (
         MindSave, MindSaveError, SnapshotNotFoundError,
-        FailureGraph, FailureNode, migrate_excluded_paths
+        FailureGraph, FailureNode, migrate_excluded_paths,
+        ConstraintCompressor, compress_layer2, find_similar_constraints
     )
 
     print("=" * 60)
-    print("MindSave v3.4 Comprehensive Test")
+    print("MindSave v3.5 Comprehensive Test")
     print("=" * 60)
 
     # Create temporary test directory
@@ -168,15 +169,66 @@ def test_all():
         print(f"  ✓ Total nodes after migration: {len(all_nodes)}")
         print(f"  ✓ Migration adds nodes from excluded_paths")
 
-        # ── Test 15: Summary ────────────────────────────────────
+        # ── Test 15: Constraint Compressor ──────────────────────
+        print("\n[Test 15] Constraint Compressor...")
+        cc = ConstraintCompressor(max_constraints=20)
+        cc.addConstraint("No Tailwind CSS")
+        cc.addConstraint("Use JWT for auth")
+        cc.addConstraint("REST API first")
+        compressed = cc.compress()
+        print(f"  ✓ Compressed: {len(compressed['constraints'])} constraints -> {len(compressed['symbolic'])} symbolic")
+        print(f"  ✓ Symbolic keys: {list(compressed['symbolic'].keys())}")
+
+        # ── Test 16: Chinese Constraint Compression ─────────────
+        print("\n[Test 16] Chinese constraint compression...")
+        compressed_zh = compress_layer2(
+            constraints=["不使用tailwind", "只用jwt认证"],
+            decisions=["REST接口优先"],
+            excluded_paths=["老bootstrap"],
+            max_constraints=20,
+        )
+        print(f"  ✓ Chinese constraints compressed: {list(compressed_zh['symbolic'].keys())}")
+        assert "theme_system" in compressed_zh["symbolic"], "Chinese 'tailwind' not matched"
+        assert "auth_strategy" in compressed_zh["symbolic"], "Chinese 'jwt' not matched"
+        print(f"  ✓ Chinese keyword matching verified")
+
+        # ── Test 17: Constraint Conflict Detection ──────────────
+        print("\n[Test 17] Constraint conflict detection...")
+        cc_conflict = ConstraintCompressor()
+        cc_conflict.addConstraint("Use Tailwind CSS")
+        cc_conflict.addConstraint("No Tailwind CSS")
+        conflicts = cc_conflict.detect_conflicts()
+        print(f"  ✓ Detected {len(conflicts)} conflicts")
+        assert len(conflicts) > 0, "Should detect conflicting constraints"
+
+        # ── Test 18: _compressed YAML roundtrip ─────────────────
+        print("\n[Test 18] _compressed YAML roundtrip...")
+        r3 = ms.save({
+            "goal": "Test compressed roundtrip",
+            "state": "Testing",
+            "next_action": "Verify",
+            "blocker": "none",
+            "constraints": ["No Tailwind CSS", "Use JWT for auth"],
+            "decisions": ["REST API first"],
+            "excluded_paths": ["localStorage for tokens"],
+        })
+        restored3 = ms.restore(r3["snapshot_id"], layers=["L1", "L2"])
+        assert len(restored3["constraints"]) >= 1, "Constraints lost after roundtrip"
+        assert len(restored3["decisions"]) >= 1, "Decisions lost after roundtrip"
+        print(f"  ✓ Roundtrip: constraints={len(restored3['constraints'])}, decisions={len(restored3['decisions'])}")
+
+        # ── Test 19: Summary ────────────────────────────────────
         print("\n" + "=" * 60)
         print("ALL TESTS PASSED! ✓")
         print("=" * 60)
-        print(f"\nMindSave v3.4 features verified:")
+        print(f"\nMindSave v3.5 features verified:")
         print(f"  • Failure Graph integration: ✓")
+        print(f"  • Constraint Compression: ✓")
+        print(f"  • Chinese keyword support: ✓")
         print(f"  • Cross-platform support: ✓")
         print(f"  • Negative cognitive memory: ✓")
         print(f"  • Migration from excluded_paths: ✓")
+        print(f"  • _compressed YAML roundtrip: ✓")
         print(f"  • SDK exports: ✓")
         print(f"  • get_signal() method: ✓")
 

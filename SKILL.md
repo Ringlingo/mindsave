@@ -13,7 +13,7 @@ read_when:
   - Any auto-trigger condition fires (see Auto-Trigger section)
 ---
 
-# MindSave v3.4 — Hierarchical Agent State System
+# MindSave v3.5 — Hierarchical Agent State System
 
 ## Core Philosophy
 
@@ -354,7 +354,7 @@ excluded_paths:
   - "Don't use Tailwind — causes style conflict"
 ```
 
-**Target (v3.5+) — Failure Graph:**
+**Current (v3.5) — Failure Graph (implemented):**
 ```yaml
 failure_graph:
   Tailwind:
@@ -371,6 +371,69 @@ failure_graph:
 `scope` field enables cross-platform: `global` failures sync to `~/.mindsave/global/` and are loaded by every project, on every platform.
 
 **Rule of thumb:** If removing this would cause the next session — on any platform — to repeat a mistake, it belongs in failure_graph.
+
+## Constraint Compression Engine (v3.5)
+
+Prevents constraint explosion by merging semantically similar constraints into symbolic entries.
+
+**Before compression:**
+```yaml
+constraints:
+  - "no tailwind"
+  - "use css variables"
+  - "avoid utility css"
+  - "no utility framework"
+```
+
+**After compression:**
+```yaml
+theme_system:
+  strategy: css_variables_only
+  rejected: [Tailwind, utility-first]
+```
+
+### Compression Rules
+
+The engine matches keywords against predefined rule sets (English + Chinese):
+
+| Category | English Keywords | Chinese Keywords | Symbolic Name |
+|----------|-----------------|-----------------|---------------|
+| CSS/Styling | tailwind, bootstrap, css framework | 样式框架, 组件库, ui框架 | theme_system / ui_framework |
+| Auth | jwt, session, oauth | 令牌, 认证, 鉴权 | auth_strategy |
+| Database | orm, nosql, mongodb | 数据库orm, 文档数据库 | db_access / db_type |
+| API | rest, graphql | 接口风格, 图查询 | api_style |
+
+### SDK Usage
+
+**Python:**
+```python
+from mindsave import ConstraintCompressor, compress_layer2
+
+# Direct usage
+compressor = ConstraintCompressor(max_constraints=20)
+compressor.addConstraint("No Tailwind CSS")
+compressor.addConstraint("Use JWT for auth")
+result = compressor.compress()
+
+# Convenience function
+compressed = compress_layer2(
+    constraints=["No Tailwind CSS", "Use JWT"],
+    decisions=["REST API first"],
+    excluded_paths=["localStorage for tokens"]
+)
+```
+
+**TypeScript:**
+```typescript
+import { ConstraintCompressor, compressLayer2 } from "mindsave";
+
+const compressor = new ConstraintCompressor(20);
+compressor.addConstraint("No Tailwind CSS");
+const result = compressor.compress();
+
+// Convenience function
+const compressed = compressLayer2(constraints, decisions, excludedPaths);
+```
 
 ## Storage Structure
 

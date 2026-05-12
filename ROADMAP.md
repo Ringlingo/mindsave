@@ -1,7 +1,7 @@
 # MindSave ROADMAP
 
-> 当前版本：v3.4 · Prompt-Orchestrated Runtime
-> 文档更新：2026-05-11
+> 当前版本：v3.5 · Structured Cognitive Runtime
+> 文档更新：2026-05-12
 
 ---
 
@@ -25,8 +25,8 @@ MindSave 不是 AI Memory 工具，不是聊天记录备份，不是某个平台
 ## 演进路线
 
 ```
-v3.4  Prompt-Orchestrated Runtime      ← 当前
-v3.5  Structured Cognitive Runtime     ← 解决可靠性
+v3.4  Prompt-Orchestrated Runtime      
+v3.5  Structured Cognitive Runtime     ← 当前（P0/P1 已完成）
 v3.6  Cross-Platform Protocol          ← 实现真正跨平台
 v4.0  Native Agent Runtime Kernel      ← 脱离 Prompt 依赖
 ```
@@ -130,11 +130,11 @@ excluded_paths:
 
 实施步骤：
 
-- [ ] 设计并锁定 Failure Node JSON Schema（含 `schema_version` 字段）
-- [ ] 实现 `repeat_count` 自动递增
-- [ ] 实现 `confidence` 评估（`repeat_count` + 时间衰减）
-- [ ] 实现 `scope` 路由（project 写本地，global 写 `~/.mindsave/`）
-- [ ] 更新 CLAUDE.md、SKILL.md、README
+- [x] 设计并锁定 Failure Node JSON Schema（含 `schema_version` 字段）
+- [x] 实现 `repeat_count` 自动递增
+- [x] 实现 `confidence` 评估（`repeat_count` + 时间衰减）
+- [x] 实现 `scope` 路由（project 写本地，global 写 `~/.mindsave/`）
+- [x] 更新 CLAUDE.md、SKILL.md、README
 
 ---
 
@@ -162,11 +162,12 @@ theme_system:
 
 实施步骤：
 
-- [ ] 定义 Symbolic Constraint 数据结构
-- [ ] 实现同类约束聚合（语义相似 → 合并为单条）
-- [ ] 实现约束冲突检测（互相矛盾时告警）
-- [ ] 设置约束数量上限（建议 L2 总条数 ≤ 20）
-- [ ] 实现压缩后约束的可读展开（restore 时还原）
+- [x] 定义 Symbolic Constraint 数据结构
+- [x] 实现同类约束聚合（语义相似 → 合并为单条）
+- [x] 实现约束冲突检测（互相矛盾时告警）
+- [x] 设置约束数量上限（建议 L2 总条数 ≤ 20）
+- [x] 实现压缩后约束的可读展开（restore 时还原）
+- [x] 实现中文关键词压缩规则（COMPRESSION_RULES_ZH）
 
 ---
 
@@ -249,11 +250,11 @@ execution_dag:
 
 ### v3.5 验收标准
 
-- [ ] Failure Graph 支持图结构（`repeat_count`、`confidence`、`scope`、`related`）
-- [ ] 约束列表可自动压缩，语义相同条目合并
+- [x] Failure Graph 支持图结构（`repeat_count`、`confidence`、`scope`、`related`）
+- [x] 约束列表可自动压缩，语义相同条目合并
 - [ ] L2 提取有 Structured Hook 接口，`source` 字段区分来源
 - [ ] Execution DAG 支持依赖关系和阻塞传递
-- [ ] 所有改动同步到 CLAUDE.md / SKILL.md / README
+- [x] 所有改动同步到 CLAUDE.md / SKILL.md / README
 
 ---
 
@@ -467,5 +468,5 @@ Agent Action → State Transition → MindSave State Engine → Persist
 
 ---
 
-*最后更新：2026-05-11*
-*v3.4 → v3.5 → v3.6 → v4.0*
+*最后更新：2026-05-12*
+*v3.5 (P0/P1 done) → v3.6 → v4.0*
