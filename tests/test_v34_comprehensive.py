@@ -4,10 +4,19 @@ Verifies: Failure Graph integration, Constraint Compression, Cross-platform supp
 """
 
 import sys
+import io
 import tempfile
 import shutil
 import json
 from pathlib import Path
+
+# Fix Windows GBK console encoding (BUG-2)
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 def test_all():
     # Add SDK to path
