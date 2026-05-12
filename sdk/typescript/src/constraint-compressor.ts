@@ -83,8 +83,9 @@ export class ConstraintCompressor {
   addConstraint(text: string): void {
     const textLower = text.toLowerCase();
     
-    // Try to match against compression rules
-    for (const rule of COMPRESSION_RULES) {
+    // Try to match against compression rules (English + Chinese)
+    const allRules = [...COMPRESSION_RULES, ...COMPRESSION_RULES_ZH];
+    for (const rule of allRules) {
       if (rule.keywords.some(kw => textLower.includes(kw))) {
         if (!this.symbolic.has(rule.symbolicName)) {
           this.symbolic.set(
@@ -217,4 +218,60 @@ export function findSimilarConstraints(
     }
   }
   return matches;
+}
+
+// ── Chinese keyword rules (DEF-3: support Chinese constraints) ─────────────
+
+interface CompressionRuleZH {
+  keywords: string[];
+  strategy: string;
+  symbolicName: string;
+}
+
+const COMPRESSION_RULES_ZH: CompressionRuleZH[] = [
+  // CSS / Styling
+  { keywords: ["tailwind", "样式框架", "css框架", "实用优先", "工具类css"], strategy: "css_variables_only", symbolicName: "theme_system" },
+  { keywords: ["bootstrap", "组件库", "ui框架", "界面框架"], strategy: "minimal_custom_css", symbolicName: "ui_framework" },
+  
+  // Auth
+  { keywords: ["jwt", "令牌", "认证", "鉴权", "授权"], strategy: "jwt_with_refresh", symbolicName: "auth_strategy" },
+  { keywords: ["session", "会话", "cookie"], strategy: "stateless_auth_only", symbolicName: "session_management" },
+  
+  // Database
+  { keywords: ["orm", "数据库orm", "sqlalchemy", "django orm"], strategy: "direct_sql_or_orm", symbolicName: "db_access" },
+  { keywords: ["nosql", "mongodb", "文档数据库", "非关系型"], strategy: "sql_first", symbolicName: "db_type" },
+  
+  // API
+  { keywords: ["rest", "restful", "接口风格"], strategy: "openapi_first", symbolicName: "api_style" },
+  { keywords: ["graphql", "gql", "图查询"], strategy: "rest_over_graphql", symbolicName: "api_style" },
+];
+
+// ── Integration helper for MindSave ─────────────────────
+
+export function compressLayer2(
+  constraints: string[],
+  decisions: string[],
+  excludedPaths: string[],
+  maxConstraints: number = 20,
+): {
+  constraints: string[];
+  decisions: string[];
+  symbolic: Record<string, SymbolicConstraintData>;
+} {
+  const compressor = new ConstraintCompressor(maxConstraints);
+  
+  for (const c of constraints) {
+    compressor.addConstraint(c);
+  }
+  
+  for (const d of decisions) {
+    compressor.addDecision(d);
+  }
+  
+  // Also process excluded_paths as constraints
+  for (const ep of excludedPaths) {
+    compressor.addConstraint(`no ${ep}`);
+  }
+  
+  return compressor.compress();
 }

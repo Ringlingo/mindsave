@@ -4,19 +4,37 @@ Tests for v3.5 Constraint Compression Engine
 """
 
 import sys
+import io
 import tempfile
 import shutil
 from pathlib import Path
 
+# Fix Windows GBK console encoding (BUG-2)
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "sdk" / "python"))
 
-from constraint_compressor import (
-    ConstraintCompressor,
-    SymbolicConstraint,
-    compress_layer2,
-    _semantic_similarity,
-    find_similar_constraints,
-)
+try:
+    from mindsave.constraint_compressor import (
+        ConstraintCompressor,
+        SymbolicConstraint,
+        compress_layer2,
+        _semantic_similarity,
+        find_similar_constraints,
+    )
+except (ImportError, ModuleNotFoundError):
+    from constraint_compressor import (
+        ConstraintCompressor,
+        SymbolicConstraint,
+        compress_layer2,
+        _semantic_similarity,
+        find_similar_constraints,
+    )
 
 
 def test_symbolic_constraint_creation():

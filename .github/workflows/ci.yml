@@ -7,11 +7,16 @@ on:
 
 jobs:
   test-python:
-    name: Python SDK Tests
-    runs-on: ubuntu-latest
+    name: Python SDK Tests (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.8", "3.11"]
+        exclude:
+          - os: windows-latest
+            python-version: "3.8"
 
     steps:
       - uses: actions/checkout@v4
@@ -21,8 +26,20 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Run tests
+      - name: Run Python SDK tests
         run: python tests/test_python_sdk.py
+        working-directory: mindsave
+
+      - name: Run Failure Graph tests
+        run: python tests/test_failure_graph.py
+        working-directory: mindsave
+
+      - name: Run Constraint Compressor tests
+        run: python tests/test_constraint_compressor.py
+        working-directory: mindsave
+
+      - name: Run Integration tests
+        run: python tests/test_integration_fixes.py
         working-directory: mindsave
 
       - name: Build package
@@ -48,6 +65,10 @@ jobs:
 
       - name: Build TypeScript
         run: npm run build
+        working-directory: mindsave/sdk/typescript
+
+      - name: Type check
+        run: npx tsc --noEmit
         working-directory: mindsave/sdk/typescript
 
   lint-markdown:

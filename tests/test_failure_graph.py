@@ -4,14 +4,26 @@ Tests for MindSave Failure Graph (v3.5+)
 
 import sys
 import os
+import io
 import tempfile
 import shutil
 from pathlib import Path
 
+# Fix Windows GBK console encoding (BUG-2)
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "sdk" / "python"))
 
-from failure_graph import FailureNode, FailureGraph, migrate_excluded_paths
+try:
+    from mindsave.failure_graph import FailureNode, FailureGraph, migrate_excluded_paths
+except (ImportError, ModuleNotFoundError):
+    from failure_graph import FailureNode, FailureGraph, migrate_excluded_paths
 
 # Note: MindSave class tests are in test_python_sdk.py
 

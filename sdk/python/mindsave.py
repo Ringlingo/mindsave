@@ -21,8 +21,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from .failure_graph import FailureGraph, FailureNode
-from .constraint_compressor import ConstraintCompressor, compress_layer2
+try:
+    from .failure_graph import FailureGraph, FailureNode
+    from .constraint_compressor import ConstraintCompressor, compress_layer2
+except ImportError:
+    # Fallback for direct script execution
+    from failure_graph import FailureGraph, FailureNode
+    from constraint_compressor import ConstraintCompressor, compress_layer2
 
 __version__ = "3.4.0"
 __all__ = ["MindSave", "MindSaveError", "SnapshotNotFoundError"]
@@ -82,15 +87,37 @@ def _parse_front_matter(content: str) -> tuple[dict, str]:
 
 def _parse_yaml_simple(yaml_str: str) -> dict:
     """Simple YAML parser for MindSave snapshot front matter.
-    Handles: key: value, key: (multiline list with - items), inline arrays [].
-    Does NOT handle nested objects beyond one level — sufficient for MindSave format."""
+    Handles: key: value, key: (multiline list with - items), inline arrays [],
+    YAML literal block (key: |), and indented JSON blocks for _compressed."""
     result: dict = {}
     current_key = ""
     list_items: list = []
     in_list = False
+    in_literal_block = False
+    literal_lines: list = []
 
     for line in yaml_str.split("\n"):
         stripped = line.strip()
+
+        # Handle literal block content (indented lines after "key: |")
+        if in_literal_block:
+            if line and not line[0].isspace() and stripped:
+                # End of literal block — non-indented, non-empty line
+                literal_text = "\n".join(literal_lines)
+                # Try JSON parse for _compressed
+                if current_key == "_compressed":
+                    try:
+                        result[current_key] = json.loads(literal_text)
+                    except json.JSONDecodeError:
+                        result[current_key] = literal_text
+                else:
+                    result[current_key] = literal_text
+                literal_lines = []
+                in_literal_block = False
+                # Don't skip this line — re-process as normal
+            else:
+                literal_lines.append(stripped)
+                continue
 
         # Skip comments and empty lines
         if not stripped or stripped.startswith("#"):
@@ -116,7 +143,12 @@ def _parse_yaml_simple(yaml_str: str) -> dict:
         kv_match = re.match(r'^(\w+(?:_\w+)*):\s*(.*)', stripped)
         if kv_match:
             key, val = kv_match.group(1), kv_match.group(2).strip()
-            if val.startswith("[") and val.endswith("]"):
+            if val == "|":
+                # YAML literal block — collect indented lines
+                current_key = key
+                in_literal_block = True
+                literal_lines = []
+            elif val.startswith("[") and val.endswith("]"):
                 # Inline array
                 items = [v.strip().strip('"').strip("'") for v in val[1:-1].split(",")]
                 result[key] = [v for v in items if v]
@@ -130,6 +162,17 @@ def _parse_yaml_simple(yaml_str: str) -> dict:
     if in_list and list_items:
         result[current_key] = list_items
 
+    # Flush final literal block
+    if in_literal_block and literal_lines:
+        literal_text = "\n".join(literal_lines)
+        if current_key == "_compressed":
+            try:
+                result[current_key] = json.loads(literal_text)
+            except json.JSONDecodeError:
+                result[current_key] = literal_text
+        else:
+            result[current_key] = literal_text
+
     return result
 
 
@@ -140,6 +183,7 @@ def _front_matter_template(
     auto_trigger_reason: Optional[str] = None,
     tool_calls_since_last: int = 0,
     layers: Optional[list[str]] = None,
+    failure_graph_data: Optional[dict] = None,
 ) -> str:
     """Build YAML front matter string for a snapshot."""
     lines = [
@@ -168,30 +212,17 @@ def _front_matter_template(
     excluded_paths = state.get("excluded_paths", [])
     compressed = state.get("_compressed", None)
 
-    # v3.5: render compressed format (symbolic entries)
+    lines.append("")
+    lines.append("# Layer 2: Cognitive Cache (restored on demand)")
+
+    # v3.5: Write _compressed as YAML literal block with JSON content
     if compressed and compressed.get("symbolic"):
-        lines.append("")
-        lines.append("# Layer 2: Cognitive Cache (restored on demand)")
-        # Write _compressed as YAML literal block (avoids escaping issues)
-        import json
         compressed_json = json.dumps(compressed, ensure_ascii=False, indent=2)
         lines.append("_compressed: |")
-        for line in compressed_json.split('\n'):
-            if line:
-                lines.append(f"    {line}")
-        # Also render symbolic entries as human-readable (optional)
-        for name, data in compressed["symbolic"].items():
-            lines.append(f"{name}:")
-            lines.append(f"    strategy: {data.get('strategy', '')}")
-            rejected = data.get("rejected", [])
-            if rejected:
-                lines.append(f"    rejected: [{', '.join(repr(r) for r in rejected)}]")
-            reason = data.get("reason", "")
-            if reason:
-                lines.append(f"    reason: \"{reason}\"")
-    elif constraints or decisions or excluded_paths:
-        lines.append("")
-        lines.append("# Layer 2: Cognitive Cache (restored on demand)")
+        for cline in compressed_json.split('\n'):
+            if cline:
+                lines.append(f"    {cline}")
+        # Also write decompressed human-readable fields
         if constraints:
             lines.append("constraints:")
             for c in constraints:
@@ -210,6 +241,49 @@ def _front_matter_template(
                 lines.append(f'  - "{e}"')
         else:
             lines.append("excluded_paths: []")
+        # Render symbolic entries as human-readable comments
+        for name, data in compressed["symbolic"].items():
+            lines.append(f"# symbolic: {name}")
+            lines.append(f"#   strategy: {data.get('strategy', '')}")
+            rejected = data.get("rejected", [])
+            if rejected:
+                lines.append(f"#   rejected: [{', '.join(repr(r) for r in rejected)}]")
+            reason = data.get("reason", "")
+            if reason:
+                lines.append(f"#   reason: \"{reason}\"")
+    elif constraints or decisions or excluded_paths:
+        if constraints:
+            lines.append("constraints:")
+            for c in constraints:
+                lines.append(f'  - "{c}"')
+        else:
+            lines.append("constraints: []")
+        if decisions:
+            lines.append("decisions:")
+            for d in decisions:
+                lines.append(f'  - "{d}"')
+        else:
+            lines.append("decisions: []")
+        if excluded_paths:
+            lines.append("excluded_paths:")
+            for e in excluded_paths:
+                lines.append(f'  - "{e}"')
+        else:
+            lines.append("excluded_paths: []")
+    else:
+        lines.append("constraints: []")
+        lines.append("decisions: []")
+        lines.append("excluded_paths: []")
+
+    # Failure Graph data (DEF-2: persist to snapshot)
+    if failure_graph_data:
+        lines.append("")
+        lines.append("# Failure Graph (negative cognitive memory)")
+        fg_json = json.dumps(failure_graph_data, ensure_ascii=False, indent=2)
+        lines.append("failure_graph: |")
+        for fgline in fg_json.split('\n'):
+            if fgline:
+                lines.append(f"    {fgline}")
 
     # Auto-trigger metadata
     if auto_trigger_reason:
@@ -376,6 +450,7 @@ class MindSave:
             **state,
             "constraints": compressed["constraints"],
             "decisions": compressed["decisions"],
+            "excluded_paths": l2_excluded,  # Preserve excluded_paths explicitly
             "_compressed": compressed,  # Includes symbolic section
         }
 
@@ -389,6 +464,7 @@ class MindSave:
             state=full_state,
             auto_trigger_reason=auto_trigger_reason,
             tool_calls_since_last=tool_calls_since_last,
+            failure_graph_data=self.failure_graph.to_dict() if self.failure_graph.list_all() else None,
         )
 
         # Layer 3 (Cold Archive) — always appended
@@ -459,7 +535,7 @@ class MindSave:
         dict
             Restored state with keys: ``goal``, ``state``, ``next_action``,
             ``active_files``, ``blocker``, ``constraints``, ``decisions``,
-            ``excluded_paths``, ``layers_restored``, ``created_at``.
+            ``excluded_paths``, ``failure_graph``, ``layers_restored``, ``created_at``.
         """
         layers = layers or ["L1", "L2"]
         snapshot_path = self._snapshots_dir / f"{snapshot_id}.md"
@@ -481,6 +557,7 @@ class MindSave:
             "constraints": [],
             "decisions": [],
             "excluded_paths": [],
+            "failure_graph": {},
             "layers_restored": [],
             "created_at": meta.get("created_at", ""),
         }
@@ -493,19 +570,41 @@ class MindSave:
             result["decisions"] = meta.get("decisions", [])
             result["excluded_paths"] = meta.get("excluded_paths", [])
 
-            # v3.5: expand symbolic entries
+            # v3.5: expand symbolic entries from _compressed
             _compressed = meta.get("_compressed")
             if _compressed:
                 try:
-                    import json
-                    compressed_data = json.loads(_compressed)
-                    from .constraint_compressor import ConstraintCompressor
-                    compressor = ConstraintCompressor()
+                    # _compressed is already parsed from JSON by _parse_yaml_simple
+                    compressed_data = _compressed if isinstance(_compressed, dict) else json.loads(_compressed)
+                    try:
+                        from .constraint_compressor import ConstraintCompressor as _CC
+                    except ImportError:
+                        from constraint_compressor import ConstraintCompressor as _CC
+                    compressor = _CC()
                     expanded = compressor.decompress(compressed_data)
-                    result["constraints"].extend(expanded.get("constraints", []))
-                    result["decisions"].extend(expanded.get("decisions", []))
+                    # Merge expanded entries (avoid duplicates)
+                    for c in expanded.get("constraints", []):
+                        if c not in result["constraints"]:
+                            result["constraints"].append(c)
+                    for d in expanded.get("decisions", []):
+                        if d not in result["decisions"]:
+                            result["decisions"].append(d)
                 except Exception as e:
-                    print(f"⚠️ Failed to expand compressed data: {e}")
+                    # Use ASCII-safe warning instead of emoji (BUG-2 fix)
+                    import sys
+                    try:
+                        sys.stderr.write(f"[MindSave] Failed to expand compressed data: {e}\n")
+                    except Exception:
+                        pass
+
+        # DEF-2: restore failure_graph data
+        fg_data = meta.get("failure_graph")
+        if fg_data:
+            try:
+                fg_dict = fg_data if isinstance(fg_data, dict) else json.loads(fg_data)
+                result["failure_graph"] = fg_dict
+            except Exception:
+                pass
 
         return result
 
@@ -622,6 +721,86 @@ class MindSave:
             "deleted": getattr(self, "_last_cleaned", []),
             "remaining": len(self.list()),
         }
+
+    # ── Failure Graph API ──────────────────────────────────────────────────
+
+    def add_failure(
+        self,
+        name: str,
+        rejected_by: str = "user",
+        reason: str = "",
+        scope: str = "project",
+        related: Optional[list[str]] = None,
+        alternatives: Optional[list[str]] = None,
+    ) -> None:
+        """
+        Add a failure node to the Failure Graph.
+
+        Parameters
+        ----------
+        name : str
+            Name/description of the failed approach.
+        rejected_by : str
+            Who rejected it ("user", "ai", "test").
+        reason : str
+            Why it failed.
+        scope : str
+            "project" (local) or "global" (cross-platform).
+        related : list[str], optional
+            Related failure names.
+        alternatives : list[str], optional
+            Alternative approaches to try.
+        """
+        node = FailureNode(
+            name=name,
+            rejected_by=rejected_by,
+            reason=reason,
+            scope=scope,
+            related=related,
+            alternatives=alternatives,
+        )
+        self.failure_graph.add(node)
+
+    def get_failure(
+        self,
+        name: str,
+        scope: str = "project",
+    ) -> Optional[FailureNode]:
+        """
+        Get a failure node from the Failure Graph.
+
+        Parameters
+        ----------
+        name : str
+            Name of the failure node.
+        scope : str
+            "project" or "global".
+
+        Returns
+        -------
+        FailureNode or None
+        """
+        return self.failure_graph.get(name, scope=scope)
+
+    def list_failures(self) -> list:
+        """
+        List all failure nodes (project + global).
+
+        Returns
+        -------
+        list[FailureNode]
+        """
+        return self.failure_graph.list_all()
+
+    def export_failure_graph(self) -> dict:
+        """
+        Export the Failure Graph as a dictionary for snapshot.
+
+        Returns
+        -------
+        dict
+        """
+        return self.failure_graph.to_dict()
 
     # ── Private helpers ──────────────────────────────────────────────────────
 
@@ -902,98 +1081,3 @@ class OpenHandsState:
 
     def list_states(self) -> list[dict]:
         return self.ms.list()
-
-
-# ─────────────────────────────────────────────────────────────────────
-# MindSave Class Extension (Failure Graph Integration)
-# ─────────────────────────────────────────────────────────────────────
-
-# Add helper methods to MindSave class for Failure Graph integration
-
-def add_failure(
-    self: "MindSave",
-    name: str,
-    rejected_by: str = "user",
-    reason: str = "",
-    scope: str = "project",
-    related: Optional[list[str]] = None,
-    alternatives: Optional[list[str]] = None,
-) -> None:
-    """
-    Add a failure node to the Failure Graph.
-
-    Parameters
-    ----------
-    name : str
-        Name/description of the failed approach.
-    rejected_by : str
-        Who rejected it ("user", "ai", "test").
-    reason : str
-        Why it failed.
-    scope : str
-        "project" (local) or "global" (cross-platform).
-    related : list[str], optional
-        Related failure names.
-    alternatives : list[str], optional
-        Alternative approaches to try.
-    """
-    node = FailureNode(
-        name=name,
-        rejected_by=rejected_by,
-        reason=reason,
-        scope=scope,
-        related=related,
-        alternatives=alternatives,
-    )
-    self.failure_graph.add(node)
-
-
-def get_failure(
-    self: "MindSave",
-    name: str,
-    scope: str = "project",
-) -> Optional[FailureNode]:
-    """
-    Get a failure node from the Failure Graph.
-
-    Parameters
-    ----------
-    name : str
-        Name of the failure node.
-    scope : str
-        "project" or "global".
-
-    Returns
-    -------
-    FailureNode or None
-    """
-    return self.failure_graph.get(name, scope=scope)
-
-
-def list_failures(self: "MindSave") -> list:
-    """
-    List all failure nodes (project + global).
-
-    Returns
-    -------
-    list[FailureNode]
-    """
-    return self.failure_graph.list_all()
-
-
-def export_failure_graph(self: "MindSave") -> dict:
-    """
-    Export the Failure Graph as a dictionary for snapshot.
-
-    Returns
-    -------
-    dict
-    """
-    return self.failure_graph.to_dict()
-
-
-# Attach methods to MindSave class
-MindSave.add_failure = add_failure
-MindSave.get_failure = get_failure
-MindSave.list_failures = list_failures
-MindSave.export_failure_graph = export_failure_graph

@@ -71,6 +71,25 @@ COMPRESSION_RULES = [
     ({"graphql", "gql"}, "rest_over_graphql", "api_style"),
 ]
 
+# Chinese keyword rules (DEF-3: support Chinese constraints)
+COMPRESSION_RULES_ZH = [
+    # CSS / Styling
+    ({"tailwind", "样式框架", "css框架", "实用优先", "工具类css"}, "css_variables_only", "theme_system"),
+    ({"bootstrap", "组件库", "ui框架", "界面框架"}, "minimal_custom_css", "ui_framework"),
+    
+    # Auth
+    ({"jwt", "令牌", "认证", "鉴权", "授权"}, "jwt_with_refresh", "auth_strategy"),
+    ({"session", "会话", "cookie"}, "stateless_auth_only", "session_management"),
+    
+    # Database
+    ({"orm", "数据库orm", "sqlalchemy", "django orm"}, "direct_sql_or_orm", "db_access"),
+    ({"nosql", "mongodb", "文档数据库", "非关系型"}, "sql_first", "db_type"),
+    
+    # API
+    ({"rest", "restful", "接口风格"}, "openapi_first", "api_style"),
+    ({"graphql", "gql", "图查询"}, "rest_over_graphql", "api_style"),
+]
+
 # Soft keyword groups for semantic matching
 SEMANTIC_GROUPS = {
     "css_styling": {"css", "style", "styling", "theme", "layout", "responsive"},
@@ -108,8 +127,9 @@ class ConstraintCompressor:
         """Add a constraint, possibly merging into symbolic."""
         text_lower = text.lower()
         
-        # Try to match against compression rules
-        for keywords, strategy, sym_name in COMPRESSION_RULES:
+        # Try to match against compression rules (English + Chinese)
+        all_rules = list(COMPRESSION_RULES) + list(COMPRESSION_RULES_ZH)
+        for keywords, strategy, sym_name in all_rules:
             if any(kw in text_lower for kw in keywords):
                 if sym_name not in self.symbolic:
                     self.symbolic[sym_name] = SymbolicConstraint(
@@ -161,7 +181,11 @@ class ConstraintCompressor:
         conflicts = self.detect_conflicts()
         if conflicts:
             for c in conflicts:
-                print(f"⚠️  {c}")
+                import sys
+                try:
+                    sys.stderr.write(f"[MindSave] {c}\n")
+                except Exception:
+                    pass
         
         # Build compressed output
         result = {
@@ -176,7 +200,11 @@ class ConstraintCompressor:
         # If over limit, keep only the most important
         if len(result["constraints"]) > self.MAX_CONSTRAINTS:
             result["constraints"] = result["constraints"][:self.MAX_CONSTRAINTS]
-            print(f"⚠️  Constraint limit ({self.MAX_CONSTRAINTS}) reached, truncated.")
+            import sys
+            try:
+                sys.stderr.write(f"[MindSave] Constraint limit ({self.MAX_CONSTRAINTS}) reached, truncated.\n")
+            except Exception:
+                pass
         
         return result
     

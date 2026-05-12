@@ -9,6 +9,9 @@ export const SDK_VERSION = "3.4.0";
 // Failure Graph (imported from separate module)
 import { FailureNode, FailureGraph } from "./failure-graph";
 
+// Constraint Compressor (imported from separate module)
+import { ConstraintCompressor, compressLayer2 } from "./constraint-compressor";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,6 +71,7 @@ export interface SaveResult {
 export interface RestoredState extends Layer1State, Layer2State {
   layers_restored: string[];
   created_at: string;
+  failure_graph?: Record<string, unknown>;
 }
 
 export interface Stats {
@@ -106,6 +110,8 @@ interface ParsedFrontMatter {
   constraints?: string[];
   decisions?: string[];
   excluded_paths?: string[];
+  _compressed?: Record<string, unknown>;
+  failure_graph?: Record<string, unknown>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -213,6 +219,9 @@ export class MindSave {
     const l2d = decisions ?? state.decisions ?? [];
     const l2e = excluded_paths ?? state.excluded_paths ?? [];
 
+    // v3.5: Compress L2 to prevent constraint explosion
+    const compressed = compressLayer2(l2c, l2d, l2e);
+
     // Build content
     const lines: string[] = [];
     lines.push("---");
@@ -232,26 +241,47 @@ export class MindSave {
     }
     lines.push(`blocker: "${state.blocker ?? "none"}"`);
 
-    if (l2c.length || l2d.length || l2e.length) {
+    // Layer 2
+    lines.push("");
+    lines.push("# Layer 2: Cognitive Cache (restored on demand)");
+
+    // Write _compressed as YAML literal block (JSON content)
+    if (compressed.symbolic && Object.keys(compressed.symbolic).length > 0) {
+      const compressedJson = JSON.stringify(compressed, null, 2);
+      lines.push("_compressed: |");
+      for (const cline of compressedJson.split('\n')) {
+        if (cline) lines.push(`    ${cline}`);
+      }
+    }
+
+    if (compressed.constraints.length) {
+      lines.push("constraints:");
+      compressed.constraints.forEach((c) => lines.push(`  - "${c}"`));
+    } else {
+      lines.push("constraints: []");
+    }
+    if (compressed.decisions.length) {
+      lines.push("decisions:");
+      compressed.decisions.forEach((d) => lines.push(`  - "${d}"`));
+    } else {
+      lines.push("decisions: []");
+    }
+    if (l2e.length) {
+      lines.push("excluded_paths:");
+      l2e.forEach((e) => lines.push(`  - "${e}"`));
+    } else {
+      lines.push("excluded_paths: []");
+    }
+
+    // Failure Graph data (DEF-2: persist to snapshot)
+    const fgData = this.failureGraph.toDict();
+    if (Object.keys(fgData).length > 0) {
       lines.push("");
-      lines.push("# Layer 2: Cognitive Cache (restored on demand)");
-      if (l2c.length) {
-        lines.push("constraints:");
-        l2c.forEach((c) => lines.push(`  - "${c}"`));
-      } else {
-        lines.push("constraints: []");
-      }
-      if (l2d.length) {
-        lines.push("decisions:");
-        l2d.forEach((d) => lines.push(`  - "${d}"`));
-      } else {
-        lines.push("decisions: []");
-      }
-      if (l2e.length) {
-        lines.push("excluded_paths:");
-        l2e.forEach((e) => lines.push(`  - "${e}"`));
-      } else {
-        lines.push("excluded_paths: []");
+      lines.push("# Failure Graph (negative cognitive memory)");
+      const fgJson = JSON.stringify(fgData, null, 2);
+      lines.push("failure_graph: |");
+      for (const fgline of fgJson.split('\n')) {
+        if (fgline) lines.push(`    ${fgline}`);
       }
     }
 
@@ -334,6 +364,34 @@ export class MindSave {
       result.constraints = meta.constraints ?? [];
       result.decisions = meta.decisions ?? [];
       result.excluded_paths = meta.excluded_paths ?? [];
+
+      // v3.5: expand symbolic entries from _compressed
+      const compressed = meta._compressed;
+      if (compressed && typeof compressed === "object") {
+        try {
+          const compressor = new ConstraintCompressor();
+          const expanded = compressor.decompress(compressed as {
+            constraints: string[];
+            decisions: string[];
+            symbolic: Record<string, { strategy: string; rejected: string[]; reason: string }>;
+          });
+          // Merge expanded entries (avoid duplicates)
+          for (const c of expanded.constraints) {
+            if (!result.constraints.includes(c)) result.constraints.push(c);
+          }
+          for (const d of expanded.decisions) {
+            if (!result.decisions.includes(d)) result.decisions.push(d);
+          }
+        } catch {
+          // Silently skip expansion errors
+        }
+      }
+    }
+
+    // DEF-2: restore failure_graph data
+    const fgData = meta.failure_graph;
+    if (fgData && typeof fgData === "object") {
+      result.failure_graph = fgData;
     }
 
     return result;
@@ -430,12 +488,48 @@ export class MindSave {
     if (end === -1) return {};
     // Simple YAML extraction — use a real YAML parser in production
     const yamlBlock = content.slice(4, end);
-    const result: Record<string, string | string[]> = {};
+    const result: Record<string, unknown> = {};
     let currentKey = "";
     let inList = false;
     const listItems: string[] = [];
+    let inLiteralBlock = false;
+    const literalLines: string[] = [];
 
     for (const line of yamlBlock.split("\n")) {
+      // Handle literal block content (indented lines after "key: |")
+      if (inLiteralBlock) {
+        if (line && !line[0].match(/\s/) && line.trim()) {
+          // End of literal block — non-indented, non-empty line
+          const literalText = literalLines.join("\n");
+          // Try JSON parse for _compressed and failure_graph
+          if (currentKey === "_compressed" || currentKey === "failure_graph") {
+            try {
+              result[currentKey] = JSON.parse(literalText);
+            } catch {
+              result[currentKey] = literalText;
+            }
+          } else {
+            result[currentKey] = literalText;
+          }
+          literalLines.length = 0;
+          inLiteralBlock = false;
+          // Re-process this line as normal
+        } else {
+          literalLines.push(line.trim());
+          continue;
+        }
+      }
+
+      if (line.match(/^\s*#/) || !line.trim()) {
+        // Skip comments and empty lines
+        if (inList && listItems.length) {
+          result[currentKey] = [...listItems];
+          listItems.length = 0;
+          inList = false;
+        }
+        continue;
+      }
+
       if (inList && line.match(/^\s+-\s+/)) {
         listItems.push(line.replace(/^\s+-\s+/, "").replace(/"/g, ""));
         continue;
@@ -449,7 +543,12 @@ export class MindSave {
       if (kv) {
         const key = kv[1];
         const val = kv[2];
-        if (val.trim().startsWith("[")) {
+        if (val.trim() === "|") {
+          // YAML literal block — collect indented lines
+          currentKey = key;
+          inLiteralBlock = true;
+          literalLines.length = 0;
+        } else if (val.trim().startsWith("[")) {
           // inline array
           result[key] = val
             .replace(/[\[\]]/g, "")
@@ -465,7 +564,20 @@ export class MindSave {
       }
     }
     if (inList && listItems.length) result[currentKey] = [...listItems];
-    // Cast to ParsedFrontMatter — values are either string or string[]
+    // Flush final literal block
+    if (inLiteralBlock && literalLines.length) {
+      const literalText = literalLines.join("\n");
+      if (currentKey === "_compressed" || currentKey === "failure_graph") {
+        try {
+          result[currentKey] = JSON.parse(literalText);
+        } catch {
+          result[currentKey] = literalText;
+        }
+      } else {
+        result[currentKey] = literalText;
+      }
+    }
+    // Cast to ParsedFrontMatter — values are either string, string[], or object
     return result as unknown as ParsedFrontMatter;
   }
 
@@ -571,3 +683,4 @@ export default MindSave;
 // ─────────────────────────────────────────────────────────────────────────────
 
 export { FailureNode, FailureGraph, migrateExcludedPaths } from "./failure-graph";
+export { ConstraintCompressor, SymbolicConstraint, compressLayer2, findSimilarConstraints } from "./constraint-compressor";
