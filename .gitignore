@@ -25,3 +25,10 @@ Thumbs.db
 node_modules/
 __pycache__/
 *.pyc
+
+# Build output
+dist/
+*.egg-info/
+
+# Test temp
+.test-temp/

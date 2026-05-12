@@ -1,0 +1,4 @@
+node_modules/
+versions/
+sdk/typescript/dist/
+sdk/python/dist/

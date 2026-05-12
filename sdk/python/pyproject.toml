@@ -9,7 +9,6 @@ authors = [
   { name="MindSave Team" }
 ]
 description = "Hierarchical state management for AI agents — zero-dependency, information density first"
-readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
   "Development Status :: 5 - Production/Stable",
@@ -26,12 +25,15 @@ classifiers = [
 keywords = ["ai", "agent", "state-management", "memory", "persistence", "langchain", "langgraph", "crewai", "autogen"]
 
 [project.urls]
-Homepage = "https://github.com/ringling/mindsave"
-Repository = "https://github.com/ringling/mindsave"
+Homepage = "https://github.com/Ringlingo/mindsave"
+Repository = "https://github.com/Ringlingo/mindsave"
 
 [tool.setuptools]
 packages = ["mindsave"]
-package-dir = { "" = "sdk/python" }
+package-dir = { "mindsave" = "." }
+
+[tool.setuptools.package-data]
+mindsave = ["*.py"]
 
 [project.scripts]
 mindsave = "mindsave.mindsave:_main_cli"
