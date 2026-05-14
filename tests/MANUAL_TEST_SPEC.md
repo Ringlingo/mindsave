@@ -11,7 +11,7 @@
 
 ### 前置条件
 
-- 任意 AI 编程助手环境（WorkBuddy / Claude Code / Cursor 等）
+- 任意 AI 编程助手环境（Trae solo / Claude Code / Cursor 等）
 - 目标测试项目目录（建议新建空目录）
 - 已正确安装 MindSave（参考 README.md 快速上手）
 
@@ -22,9 +22,8 @@
 cp /path/to/mindsave/CLAUDE.md your-test-project/
 cp -r /path/to/mindsave/.mindsave/ your-test-project/
 
-# 2. 复制技能文件（WorkBuddy 环境）
-mkdir -p ~/.workbuddy/skills/mindsave/
-cp /path/to/mindsave/SKILL.md ~/.workbuddy/skills/mindsave/SKILL.md
+# 2. 复制技能文件（Trae solo 环境）
+# 将 /path/to/mindsave/SKILL.md 复制到 skills 目录
 
 # 3. 验证安装
 # 在 AI 助手中输入: /snapshots list

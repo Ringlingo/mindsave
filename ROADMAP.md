@@ -279,7 +279,7 @@ Schema 核心字段：
   "properties": {
     "schema_version": { "const": "1.0" },
     "platform": {
-      "enum": ["claude-code", "cursor", "windsurf", "workbuddy", "codebuddy", "custom"]
+      "enum": ["claude-code", "cursor", "windsurf", "trae-solo", "custom"]
     },
     "l1": {
       "required": ["goal", "state", "next_action"]
@@ -306,7 +306,7 @@ Schema 核心字段：
 | Claude Code | `./CLAUDE.md` | 写入文件 |
 | Cursor | `.cursorrules` | 写入文件 |
 | Windsurf | `.windsurfrules` | 写入文件 |
-| WorkBuddy | `~/.workbuddy/skills/mindsave/SKILL.md` | Skill 系统 |
+| Trae solo | Skills directory | Skill 系统 |
 | 通用 | System Prompt | 粘贴文本 |
 
 适配器接口（Python）：

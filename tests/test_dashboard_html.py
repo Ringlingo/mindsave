@@ -2,7 +2,7 @@
 import re
 import sys
 
-with open(r"j:\workbuddy工作区\projects\mindsave\sdk\tools\mindsave_dashboard.html", encoding="utf-8") as f:
+with open(r"j:\TraeSolo工作区\projects\mindsave\sdk\tools\mindsave_dashboard.html", encoding="utf-8") as f:
     html = f.read()
 
 issues = []
