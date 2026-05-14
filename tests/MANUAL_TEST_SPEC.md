@@ -23,7 +23,7 @@ cp /path/to/mindsave/CLAUDE.md your-test-project/
 cp -r /path/to/mindsave/.mindsave/ your-test-project/
 
 # 2. 配置规则文件（Trae 环境）
-# 将 CLAUDE.md 内容添加到 .trae-rules 或项目规则
+# 将 CLAUDE.md 复制到项目根目录，Trae 会自动加载
 
 # 3. 验证安装
 # 在 AI 助手中输入: /snapshots list

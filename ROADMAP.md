@@ -306,7 +306,7 @@ Schema 核心字段：
 | Claude Code | `./CLAUDE.md` | 写入文件 |
 | Cursor | `.cursorrules` | 写入文件 |
 | Windsurf | `.windsurfrules` | 写入文件 |
-| Trae | `.trae-rules` or project rules | 规则文件 |
+| Trae | `./CLAUDE.md` | 自动加载 |
 | 通用 | System Prompt | 粘贴文本 |
 
 适配器接口（Python）：
