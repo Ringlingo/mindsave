@@ -273,7 +273,7 @@ const compressed = compressLayer2(constraints, decisions, excludedPaths);
 | Claude Code | Copy `CLAUDE.md` to project root |
 | Cursor | Add `CLAUDE.md` content to `.cursorrules` |
 | Windsurf | Add `CLAUDE.md` content to `.windsurfrules` |
-| Trae solo | Copy `SKILL.md` to the skills directory |
+| Trae | Add `CLAUDE.md` content to `.trae-rules` or project rules |
 | Any LLM with system prompts | Paste `CLAUDE.md` into system prompt |
 
 **Cross-platform transfer:**
@@ -505,7 +505,7 @@ npm install mindsave        # TypeScript
 | Claude Code | 将 `CLAUDE.md` 复制到项目根目录 |
 | Cursor | 将 `CLAUDE.md` 内容添加到 `.cursorrules` |
 | Windsurf | 将 `CLAUDE.md` 内容添加到 `.windsurfrules` |
-| Trae solo | 复制 `SKILL.md` 到 skills 目录 |
+| Trae | 将 `CLAUDE.md` 内容添加到 `.trae-rules` 或项目规则 |
 | 任何支持系统提示的 AI | 将 `CLAUDE.md` 内容粘贴到系统提示 |
 
 **跨平台迁移：**

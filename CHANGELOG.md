@@ -47,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signal system for pressure detection (GREEN/YELLOW/RED).
 - Python SDK with zero dependencies.
 - TypeScript SDK with zero runtime dependencies.
-- Trae solo SKILL.md integration.
+- Trae SKILL.md integration.
 - MIT License.
 
 ## [2.0.0] - 2026-04-15

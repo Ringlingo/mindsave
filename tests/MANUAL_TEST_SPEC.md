@@ -11,7 +11,7 @@
 
 ### 前置条件
 
-- 任意 AI 编程助手环境（Trae solo / Claude Code / Cursor 等）
+- 任意 AI 编程助手环境（Trae / Claude Code / Cursor 等）
 - 目标测试项目目录（建议新建空目录）
 - 已正确安装 MindSave（参考 README.md 快速上手）
 
@@ -22,8 +22,8 @@
 cp /path/to/mindsave/CLAUDE.md your-test-project/
 cp -r /path/to/mindsave/.mindsave/ your-test-project/
 
-# 2. 复制技能文件（Trae solo 环境）
-# 将 /path/to/mindsave/SKILL.md 复制到 skills 目录
+# 2. 配置规则文件（Trae 环境）
+# 将 CLAUDE.md 内容添加到 .trae-rules 或项目规则
 
 # 3. 验证安装
 # 在 AI 助手中输入: /snapshots list
