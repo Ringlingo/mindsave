@@ -1,9 +1,7 @@
 # MindSave
 
-> AI 编程工具的可移植认知状态层
-> Portable Cognitive State Layer for AI Coding Agents
-
-**跨会话、跨平台**保存 Agent 的执行状态与失败记忆。在 Claude Code 积累的经验，在 Cursor 里同样生效。
+> 借鉴游戏即时存档/读档机制的 Agent 状态管理项目，像一个"便携式游戏存档"系统，能够跨会话、跨平台保存 Agent 的执行现场与失败记忆。只需将项目存入移动硬盘，便可在不同设备间无缝恢复工作进度，实现真正的"断点续作"。提供独特的"失败记忆"（excluded_paths）会记录被否决的方案，防止 AI 反复踩坑，让每一次协作都从上一次的终点智能启航。
+> Portable Cognitive State Layer for AI Coding Agents — save/load like a game checkpoint: cross-session, cross-platform, portable.
 
 [English](#english) | [中文](#中文)
 
