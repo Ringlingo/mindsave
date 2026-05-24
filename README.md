@@ -80,7 +80,7 @@ Three layers, sized by information density:
 excluded_paths:
   - "no Tailwind — causes style conflict"
 
-# Current (v3.5) — Failure Graph (implemented)
+# Current (v3.5.1) — Failure Graph (implemented)
 failure_graph:
   Tailwind:
     rejected_by: user
@@ -320,6 +320,7 @@ MindSave is currently a **Prompt-Orchestrated Runtime** — the AI follows instr
 | Prompt compliance not enforceable | Weaker models may drift | — |
 | L2 extraction is AI-summarized | May miss or hallucinate constraints | — |
 | Constraint list can grow unbounded | Restore cost eventually exceeds benefit | **v3.5: Constraint Compressor** |
+| Relative-path cwd drift | Snapshots fragment across subdirectories | **v3.5.1: Workspace root enforcement** |
 | No deterministic runtime hooks | Hidden state cannot be captured | — |
 
 These are the focus of v3.5 and v3.6. See [ROADMAP.md](./ROADMAP.md).
@@ -412,7 +413,7 @@ AI 智能体失败的原因，不是忘记了对话，而是**重复了被拒绝
 excluded_paths:
   - "不要用 Tailwind — 导致样式冲突"
 
-# 当前（v3.5）— Failure Graph（已实现）
+# 当前（v3.5.1）— Failure Graph（已实现）
 failure_graph:
   Tailwind:
     rejected_by: user
@@ -529,6 +530,7 @@ MindSave 当前是 **Prompt-Orchestrated Runtime** — AI 遵守指令，尚无�
 | Prompt 合规不可强制 | 弱模型可能 state drift |
 | L2 提取由 AI 摘要 | 可能漏判或 hallucinate 约束 |
 | 约束列表可无限增长 | **v3.5 已解决：Constraint Compressor** |
+| 相对路径 cwd 漂移 | **v3.5.1 已解决：强制 workspace root** |
 | 无确定性运行时 hooks | Hidden state 无法捕获 |
 
 这些是 v3.6 和 v4.0 的核心改进目标。详见 [ROADMAP.md](./ROADMAP.md)。
