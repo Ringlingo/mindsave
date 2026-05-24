@@ -37,6 +37,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DEF-3: Chinese constraint compression rules added and tested.
 - DEF-4: Failure Graph methods are proper class methods (not monkey-patched).
 
+## [3.5.1] - 2026-05-24
+
+### Fixed
+
+- **cwd-drift bug (P0)**: SKILL.md and CLAUDE.md used relative `.mindsave/` paths, causing snapshots to save into the current working directory instead of the workspace root. This led to snapshot fragmentation across subdirectories (e.g., `novels/项目名/.mindsave/`) and silent `/load` failures.
+- All path references in SKILL.md and CLAUDE.md updated to use `{workspace_root}/.mindsave/` with explicit workspace root directives at file tops.
+- Skill discovery: documented that some environments require user-level skill installation (`~/.workbuddy/skills/`) when project-level skills are not recognized by the Skill tool.
+
 ## [3.0.0] - 2026-04-19
 
 ### Added
@@ -59,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML front matter format for snapshots.
 - Index tracking and signal state.
 
+[3.5.1]: https://github.com/Ringlingo/mindsave/compare/v3.5.0...v3.5.1
 [3.5.0]: https://github.com/Ringlingo/mindsave/compare/v3.0.0...v3.5.0
 [3.0.0]: https://github.com/Ringlingo/mindsave/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/Ringlingo/mindsave/releases/tag/v2.0.0

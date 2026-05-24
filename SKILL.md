@@ -15,6 +15,16 @@ read_when:
 
 # MindSave v3.5 — Hierarchical Agent State System
 
+## ⚠️ Workspace Root (READ FIRST)
+
+**ALL `.mindsave/` paths in this skill MUST resolve to the workspace root, NOT the current working directory (`cwd`).**
+
+- Always resolve `.mindsave/` relative to the active workspace root (e.g., `{workspace_root}/.mindsave/`)
+- All saves: `{workspace_root}/.mindsave/snapshots/`
+- All loads: `{workspace_root}/.mindsave/index.json`
+- **NEVER save relative to cwd.** cwd can drift (e.g., into subdirectories), causing snapshot fragmentation.
+- When in doubt, use absolute paths for all `.mindsave/` file operations.
+
 ## Core Philosophy
 
 **Information density > token count.** The expensive part of recovery is not tokens — it's repeated reasoning. A 50-token constraint ("don't use Tailwind") saves more computation than 500 tokens of tool logs.
@@ -53,7 +63,7 @@ read_when:
 
 Execute when receiving `/save`:
 
-1. Ensure `.mindsave/` directories exist.
+1. Ensure `{workspace_root}/.mindsave/` directories exist.
 2. Generate topic summary from first user input (≤20 chars, alphanumeric + underscore only, replace spaces/special chars with `_`). If same-day snapshot exists, append `-2`, `-3`, etc.
 3. **Layer 1 (always):**
    - `goal` — Current task objective (one sentence)
@@ -69,8 +79,8 @@ Execute when receiving `/save`:
    - Recent tool calls (last 5)
    - File change summary (`git diff --stat` or manual)
    - Completed steps (for debugging reference)
-6. Save to `.mindsave/snapshots/{topic}_{date}.md`.
-7. Update `.mindsave/index.json`.
+6. Save to `{workspace_root}/.mindsave/snapshots/{topic}_{date}.md`.
+7. Update `{workspace_root}/.mindsave/index.json`.
 8. Reply: "💾 MindSave checkpoint saved. Start a new conversation with /load to continue."
 
 **Snapshot template:**
@@ -128,13 +138,13 @@ Prevent redundant snapshots from rapid-fire trigger signals:
 
 - **Rule**: Minimum **5 minutes** or **10 conversation turns** between auto-snapshots (whichever comes first).
 - **Exceptions**: Manual `/save` ignores cooldown. Session-end forced save ignores cooldown.
-- **Implementation**: Track `last_auto_save_time` and `last_auto_save_turn` in `.mindsave/signal.json`. Check before any auto-trigger fires.
+- **Implementation**: Track `last_auto_save_time` and `last_auto_save_turn` in `{workspace_root}/.mindsave/signal.json`. Check before any auto-trigger fires.
 
 ### /load — State Restoration
 
 Execute when receiving `/load`:
 
-1. Read `.mindsave/index.json`, list snapshots in reverse chronological order (newest first).
+1. Read `{workspace_root}/.mindsave/index.json`, list snapshots in reverse chronological order (newest first).
 2. **If only 1 snapshot exists**: auto-load it (skip selection).
    **If multiple snapshots exist**: display numbered list with `snapshot_id`, `created_at`, and `goal`; wait for user to input a number.
 3. After snapshot selected:
@@ -163,7 +173,7 @@ Execute when user needs to debug or review history:
 
 1. **Without keyword**: Read the selected snapshot's Layer 3 section. Display completed steps, file changes, and tool calls.
 2. **With keyword** (`/recall "JWT"`): Scan ALL L3 snapshot files for the keyword, return matching snapshots with brief context. Uses simple grep — no external index needed.
-3. If 20+ snapshots exist, maintain a lightweight keyword index (`.mindsave/l3_index.json`) updated on each `/save`.
+3. If 20+ snapshots exist, maintain a lightweight keyword index (`{workspace_root}/.mindsave/l3_index.json`) updated on each `/save`.
 4. This is a **read-only inspection** — does not affect execution state.
 
 ### /snapshots — Snapshot Management
@@ -180,7 +190,7 @@ When context reaches CRITICAL pressure level, save ONLY Layer 1:
 
 1. Extract: goal, state, next_action, active_files, blocker.
 2. Skip Layer 2 and Layer 3 (save tokens).
-3. Save as `.mindsave/snapshots/OVF_{topic}_{datetime}.md`.
+3. Save as `{workspace_root}/.mindsave/snapshots/OVF_{topic}_{datetime}.md`.
 4. Update index.
 5. Interrupt: "⚠️ Context overflow imminent. MindSave auto-saved (Layer 1 only). Start a new conversation with /load to continue."
 
@@ -245,7 +255,7 @@ Complex tasks carry more state that's expensive to re-derive:
 
 ### Signal File Integration (运行时心跳)
 
-Update `.mindsave/signal.json` with threshold state after each self-check:
+Update `{workspace_root}/.mindsave/signal.json` with threshold state after each self-check:
 
 ```json
 {
@@ -438,7 +448,7 @@ const compressed = compressLayer2(constraints, decisions, excludedPaths);
 ## Storage Structure
 
 ```
-.mindsave/
+{workspace_root}/.mindsave/
 ├── index.json             # Snapshot index
 ├── signal.json            # Runtime state (auto-generated)
 ├── snapshots/             # All snapshot files (3-layer format)
@@ -449,7 +459,7 @@ const compressed = compressLayer2(constraints, decisions, excludedPaths);
 └── execution_graphs/      # Execution DAG storage
 ```
 
-**Storage isolation**: All MindSave files live under `.mindsave/`. Never mix with MEMORY.md or other identity files.
+**Storage isolation**: All MindSave files live under `{workspace_root}/.mindsave/`. Never mix with MEMORY.md or other identity files.
 
 ## Snapshot Cleanup
 

@@ -81,6 +81,10 @@ These lightweight rituals prevent silent drift, keep the assistant aligned, and 
 
 ## MindSave v3.5 Runtime Rules
 
+### Workspace Root
+
+**ALL `.mindsave/` paths MUST resolve to the workspace root, NOT `cwd`.** cwd can drift between sessions (e.g., into subdirectories), causing snapshot fragmentation. Always use `{workspace_root}/.mindsave/` — never relative to cwd.
+
 ### Core Principle
 Information density > token count. Restore action-critical state, not conversation history.
 
@@ -195,7 +199,7 @@ On every `/save`, perform lightweight cleanup:
 
 ### Tool Call Logging
 
-After any file modification or shell command, append to `.mindsave/tool_logs/{session_id}.jsonl`:
+After any file modification or shell command, append to `{workspace_root}/.mindsave/tool_logs/{session_id}.jsonl`:
 ```
 {"timestamp":"{ISO}","action":"{tool}","target":"{file/command}","summary":"{one-line desc}"}
 ```
@@ -203,7 +207,7 @@ After any file modification or shell command, append to `.mindsave/tool_logs/{se
 ### Storage Structure
 
 ```
-.mindsave/
+{workspace_root}/.mindsave/
 ├── index.json             # Snapshot index
 ├── signal.json            # Runtime state (auto-generated)
 ├── snapshots/             # All snapshot files (3-layer format)
@@ -214,7 +218,7 @@ After any file modification or shell command, append to `.mindsave/tool_logs/{se
 └── execution_graphs/      # Execution DAG storage
 ```
 
-**Storage isolation**: All MindSave files live under `.mindsave/`. Never mix with MEMORY.md or other identity files.
+**Storage isolation**: All MindSave files live under `{workspace_root}/.mindsave/`. Never mix with MEMORY.md or other identity files.
 
 ---
 
