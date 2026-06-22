@@ -1,7 +1,7 @@
-# MindSave
+# MindSave v4.1
 
-> 借鉴游戏即时存档/读档机制的 Agent 状态管理项目，像一个"便携式游戏存档"系统，能够跨会话、跨平台保存 Agent 的执行现场与失败记忆。只需将项目存入移动硬盘，便可在不同设备间无缝恢复工作进度，实现真正的"断点续作"。提供独特的"失败记忆"（excluded_paths）会记录被否决的方案，防止 AI 反复踩坑，让每一次协作都从上一次的终点智能启航。
 > Portable Cognitive State Layer for AI Coding Agents — save/load like a game checkpoint: cross-session, cross-platform, portable.
+> 借鉴游戏即时存档/读档机制的 Agent 状态管理项目——跨会话、跨平台保存执行现场与失败记忆，实现真正的"断点续作"。
 
 [English](#english) | [中文](#中文)
 
@@ -38,26 +38,26 @@ This is **Negative Cognitive Memory** — the most underbuilt primitive in agent
 | **Key primitive** | Semantic retrieval (RAG) | Negative Cognitive Memory |
 | **Platform lock-in** | Yes | None — plain files, any LLM |
 
-**Cross-platform** is the core differentiator. Failures recorded in Claude Code travel with you to Cursor, Windsurf, or any LLM — because MindSave is platform-agnostic by design.
-
 ---
 
-### How It Works
+### Architecture (v4.0+)
 
-Three layers, sized by information density:
+MindSave v4.0 introduced a **three-tier separation architecture** (inspired by OAIS):
 
 ```
-┌─────────────────────────────────────────┐
-│  L1: Execution Register   ≤ 300 tokens  │  Always restored
-│  goal · state · next_action · blocker   │
-├─────────────────────────────────────────┤
-│  L2: Cognitive Cache      ≤ 500 tokens  │  Restored on demand
-│  constraints · decisions · failure_graph│
-├─────────────────────────────────────────┤
-│  L3: Cold Archive         unlimited     │  Debug only, never auto-restored
-│  tool_logs · completed_steps · diffs    │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  Storage Layer    Segment files (full text, no compression)│
+│  .mindsave/v4/segments/*.md                                │
+├──────────────────────────────────────────────────────────┤
+│  Index Layer      SQLite inverted index (zero dependency)  │
+│  .mindsave/v4/index.db (7 tables)                          │
+├──────────────────────────────────────────────────────────┤
+│  Context Layer    L1 + L2 + recalled segments (token budget)│
+│  Restored on demand, ≤ 800 tokens target                   │
+└──────────────────────────────────────────────────────────┘
 ```
+
+**Context Layer** still uses the L1/L2/L3 model:
 
 | Layer | Analogy | When Read | Token Budget |
 |-------|---------|-----------|-------------|
@@ -69,16 +69,133 @@ Three layers, sized by information density:
 
 ---
 
-### The Core Primitive: Failure Graph
+### Semantic Reranking (v4.1)
 
-`excluded_paths` is MindSave's most original contribution — structured memory of what not to do:
+v4.1 adds embedding-based semantic reranking on top of keyword retrieval:
+
+```
+Query → keyword recall (top-K) → embed(query) → cosine sim → α×kw + β×cosine → reranked results
+```
+
+Dual backend with automatic fallback:
+
+| Backend | Requirement | Use case |
+|---------|-------------|----------|
+| Ollama | `localhost:11434` | Local development, GPU acceleration |
+| ONNX Runtime | `pip install onnxruntime` | Production, no external service |
+| None | — | Keyword-only fallback (zero dependency) |
+
+---
+
+### Quick Start
+
+```bash
+# 1. Copy runtime config to your project
+cp CLAUDE.md your-project/
+cp -r .mindsave/ your-project/
+
+# 2. (Optional) Install Python SDK
+pip install mindsave
+
+# 3. In conversation: /save · /load · /recall
+```
+
+**No dependencies. No API keys. No build step. Works with any LLM.**
+
+---
+
+### SDK Usage (v4.1)
+
+**Python:**
+
+```python
+from mindsave import MindSave, Retriever, create_embedding_client
+
+# Initialize with semantic reranking
+ms = MindSave(".mindsave", embedding_backend="ollama")
+
+# v4.0: Segment-based save
+ms.save_segments(
+    session_meta={"project": "MYAPP", "task_type": "FEAT"},
+    segments=[{"layer": "L1", "content": "..."}]
+)
+
+# v4.0: Multi-dimensional recall
+result = ms.recall("JWT auth", limit=5)
+
+# v4.1: Semantic reranking
+hits = ms.retriever.search_with_rerank(
+    "authentication flow",
+    embedding_client=create_embedding_client("ollama"),
+    alpha=0.4, beta=0.6
+)
+
+# v3.5 compatible: Quick save/restore
+ms.save({"goal": "...", "state": "...", "next_action": "..."})
+state = ms.restore_latest()
+```
+
+**TypeScript:**
+
+```typescript
+import { MindSave } from "mindsave";
+
+const ms = new MindSave(".mindsave");
+ms.save({ goal: "...", state: "...", next_action: "..." });
+const snapshot = ms.restore("snapshot_id");
+```
+
+> See [sdk/README.md](./sdk/README.md) for full API documentation.
+
+---
+
+### Commands
+
+**v4.0 Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `/save` | Save segments (demo or interactive) |
+| `/load` | Restore latest session (L1+L2, continuation mode) |
+| `/recall <query>` | Multi-dimensional retrieval |
+| `/index rebuild` | Rebuild SQLite inverted index |
+| `/index stats` | Show index statistics |
+| `/migrate v3-to-v4` | Migrate v3.5 snapshots to v4 segments |
+| `/segments list` | List all segments |
+| `/segments show <id>` | Show segment detail |
+
+**v3.5 Compatible Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `list` | List snapshots |
+| `stats` | Show statistics |
+| `clean` | Clean old snapshots |
+| `signal` | Show pressure signal |
+
+---
+
+### Session Workflow
+
+```
+[Session 1] Fixing login page CSS, 15 conversation turns...
+[System]    Context at 72%. MindSave auto-checkpoint (L1) saved.
+
+[Session 2 — same or different platform] User types /load
+[AI]        Snapshots found:
+              [1] 2026-06-18 14:30 — Fix login page CSS [Files: 2]
+            Restoring L1 + L2...
+            Goal: Fix mobile layout break on login page.
+            Next: Verify in real iOS Safari. Continue?
+[User]      Yes.
+[AI]        (continues — no repeated reasoning, failure_graph already loaded)
+```
+
+---
+
+### Core Primitive: Failure Graph
 
 ```yaml
-# Legacy (v3.4) — flat list
-excluded_paths:
-  - "no Tailwind — causes style conflict"
-
-# Current (v3.5.1) — Failure Graph (implemented)
 failure_graph:
   Tailwind:
     rejected_by: user
@@ -90,102 +207,33 @@ failure_graph:
     alternatives: ["CSS Modules", "vanilla CSS with variables"]
 ```
 
-The `scope` field is what enables cross-platform: `global` failures sync to `~/.mindsave/global/` and are loaded by every project, on every platform.
-
-**Rule of thumb:** If removing this would cause the next session — on any platform — to repeat a mistake, it belongs in L2.
+The `scope` field enables cross-platform sync: `global` failures sync to `~/.mindsave/global/` and are loaded by every project, on every platform.
 
 ---
 
-### Quick Start
-
-```bash
-# 1. Copy runtime config to your project
-cp CLAUDE.md your-project/
-cp -r .mindsave/ your-project/
-
-# 2. (Optional) Install SDK
-pip install mindsave        # Python
-npm install mindsave        # TypeScript
-
-# 3. In conversation: /save · /load · /recall · /auto-snapshot
-```
-
-**No dependencies. No API keys. No build step. Works with any LLM.**
-
----
-
-### Session Workflow
+### Directory Structure (v4.0+)
 
 ```
-[Session 1] Fixing login page CSS, 15 conversation turns...
-[System]    ⚠️ Context at 82%. MindSave auto-checkpoint (L1) saved.
+your-project/
+├── CLAUDE.md                  # Runtime rules (auto-loaded by most AI tools)
+└── .mindsave/
+    ├── index.json             # v3.5 snapshot index
+    ├── signal.json            # Runtime state (auto-generated)
+    ├── snapshots/             # v3.5 snapshots
+    ├── failure_graph/
+    │   ├── project/           # Project-scoped failures
+    │   └── global/            # Cross-platform failures
+    ├── tool_logs/             # Tool call logs (JSONL, L3)
+    └── v4/                    # v4.0+ data layer
+        ├── index.db           # SQLite inverted index (7 tables)
+        ├── segments/          # Segment files (full text)
+        └── sessions/          # Session metadata
 
-[Session 2 — same or different platform] User types /load
-[AI]        Snapshots found:
-              [1] 2026-05-09 14:30 — Fix login page CSS [Files: 2] [Next: 3]
-            Restoring L1 + L2...
-            ✅ Goal: Fix mobile layout break on login page.
-               Next: Verify in real iOS Safari. Continue?
-[User]      Yes.
-[AI]        (continues — no repeated reasoning, failure_graph already loaded)
+~/.mindsave/
+└── global/                    # User-level global storage
+    ├── nodes/
+    └── anti_patterns.json
 ```
-
----
-
-### Layer Examples
-
-**L1 — Execution Register** (always saved, always restored):
-
-```yaml
-goal: "Implement JWT auth with refresh token rotation"
-state: "Debugging refresh token invalidation"
-next_action: "Add token expiry check in useAuth hook"
-active_files:
-  - "src/hooks/useAuth.ts"
-  - "src/lib/token.ts"
-blocker: "Refresh token not triggering re-auth before API calls fail"
-```
-
-**L2 — Cognitive Cache** (auto-extracted, restored on demand):
-
-```yaml
-constraints:
-  - "No external auth service — must be self-hosted"
-  - "httpOnly cookies over localStorage"
-decisions:
-  - "Access token: 15min · Refresh token: 7d with rotation"
-excluded_paths:
-  - "localStorage for tokens — XSS vulnerability, user rejected"
-  - "Single long-lived token — security risk"
-```
-
-**L3 — Cold Archive** (write-only, debug only):
-
-```markdown
-### Completed Steps
-1. Created JWT utility functions
-2. Implemented login/register endpoints
-
-### File Changes
-src/hooks/useAuth.ts  | 87 +++---
-src/lib/token.ts      | 120 +++++++
-```
-
----
-
-### Commands
-
-| Command | Layers | Description |
-|---------|--------|-------------|
-| `/save` | L1+L2+L3 | Full checkpoint. L2 auto-extracted from conversation. |
-| `/load` | L1+L2 | Restore state. Enter Continuation Mode. |
-| `/load --verify` | L1+L2 | Restore + check active files and platform compatibility. |
-| `/recall` | L3 | Read-only history inspection. |
-| `/recall "keyword"` | L3 | Search all L3 snapshots for keyword. |
-| `/auto-snapshot` | L1 only | Overflow protection (≤ 300 tokens), then interrupt. |
-| `/snapshots list` | — | List all snapshots (time, size, validity). |
-| `/snapshots clean` | — | Remove snapshots past limit or 30-day TTL. |
-| `/snapshots stats` | — | L1/L2/L3 distribution and storage totals. |
 
 ---
 
@@ -195,19 +243,16 @@ src/lib/token.ts      | 120 +++++++
 |--------|--------|--------|
 | 10+ tool calls since last save | L1 | Context growing fast |
 | Sub-task completed | L1 | Natural checkpoint |
-| Error recovered (failed 2+×, then succeeded) | L1 | Lesson learned |
+| Error recovered (failed 2+ times, then succeeded) | L1 | Lesson learned |
 | You say "done" / "先这样" | L1+L2 | Session ending |
 | Key architecture/API decision made | L1+L2 | High-value reasoning |
 | You correct the AI | L1+L2 | Constraint discovered |
 
-**Cooldown:** Min 5 min or 10 turns between auto-snapshots. Manual `/save` ignores cooldown.  
-**Never auto-saves:** casual Q&A, no progress, session just started, you said "don't save."
+**Cooldown:** Min 5 min or 10 turns between auto-snapshots. Manual `/save` ignores cooldown.
 
 ---
 
 ### Adaptive Threshold
-
-Thresholds adjust dynamically — not a fixed 80%:
 
 ```
 WARNING  = 0.60 × growth_multiplier × complexity_multiplier
@@ -222,48 +267,6 @@ CRITICAL = 0.80 × growth_multiplier × complexity_multiplier
 
 ---
 
-### SDK (v3.5+)
-
-**Python:**
-
-```bash
-pip install mindsave
-mindsave list · stats · clean · signal
-```
-
-```python
-from mindsave import MindSave, ConstraintCompressor, FailureGraph
-
-ms = MindSave(".mindsave")
-ms.save({"goal": "...", "state": "...", "next_action": "..."})
-snapshot = ms.restore_latest()
-
-# Failure Graph (v3.5)
-ms.add_failure("Tailwind", rejected_by="user", reason="style conflict", scope="project")
-
-# Constraint Compression (v3.5)
-compressed = ConstraintCompressor().compress()
-```
-
-**TypeScript:**
-
-```bash
-npm install mindsave
-```
-
-```typescript
-import { MindSave, ConstraintCompressor, compressLayer2 } from "mindsave";
-
-const ms = new MindSave(".mindsave");
-ms.save({ goal: "...", state: "...", next_action: "..." });
-const snapshot = ms.restore("snapshot_id");
-
-// Constraint Compression (v3.5)
-const compressed = compressLayer2(constraints, decisions, excludedPaths);
-```
-
----
-
 ### Platform Compatibility
 
 | Platform | How to Use |
@@ -274,76 +277,32 @@ const compressed = compressLayer2(constraints, decisions, excludedPaths);
 | Trae | Copy `CLAUDE.md` to project root (auto-loaded) |
 | Any LLM with system prompts | Paste `CLAUDE.md` into system prompt |
 
-**Cross-platform transfer:**
-
-```bash
-# Moving from Claude Code to Cursor
-mindsave export --platform cursor    # generates cursor-compatible config
-mindsave export --scope global       # exports global failure_graph
-# On new machine / platform:
-mindsave import                      # imports global failure_graph
-```
-
 ---
 
-### Directory Structure
+### Roadmap
 
-```
-your-project/
-├── CLAUDE.md                  # Runtime rules (auto-loaded by most AI tools)
-└── .mindsave/
-    ├── index.json             # Snapshot index
-    ├── signal.json            # Runtime state (auto-generated)
-    ├── snapshots/             # All snapshot files (3-layer format)
-    ├── failure_graph/
-    │   ├── project/           # Project-scoped failures
-    │   └── global/            # Cross-platform failures (synced from ~/.mindsave/)
-    ├── tool_logs/             # Tool call logs (JSONL, L3)
-    └── execution_graphs/      # Execution graphs
+| Version | Focus | Status |
+|---------|-------|--------|
+| **v3.5** | Structured Cognitive Runtime | Done (Failure Graph, Constraint Compression) |
+| **v4.0** | Three-tier separation architecture | Done (Segment, Indexer, Retriever, Restorer, Migrator) |
+| **v4.1** | Semantic reranking | Done (Ollama/ONNX embedding, cosine fusion) |
+| **v3.6** | Cross-Platform Protocol | Planned (JSON Schema, Platform adapters) |
+| **v4.2** | Hooks auto-segmentation | Long-term |
 
-~/.mindsave/
-└── global/                    # User-level global storage (all projects, all platforms)
-    ├── nodes/
-    └── anti_patterns.json
-```
+See [ROADMAP.md](./ROADMAP.md) for details.
 
 ---
 
 ### Known Limitations
 
-MindSave is currently a **Prompt-Orchestrated Runtime** — the AI follows instructions, there are no enforced hooks yet:
-
-| Problem | Impact | Status |
-|---------|--------|--------|
-| Prompt compliance not enforceable | Weaker models may drift | — |
-| L2 extraction is AI-summarized | May miss or hallucinate constraints | — |
-| Constraint list can grow unbounded | Restore cost eventually exceeds benefit | **v3.5: Constraint Compressor** |
-| Relative-path cwd drift | Snapshots fragment across subdirectories | **v3.5.1: Workspace root enforcement** |
-| No deterministic runtime hooks | Hidden state cannot be captured | — |
-
-These are the focus of v3.5 and v3.6. See [ROADMAP.md](./ROADMAP.md).
-
----
-
-### Roadmap
-
-| Version | Focus | Key Deliverable |
-|---------|-------|----------------|
-| **v3.5** | Structured Cognitive Runtime | ~~Failure Graph~~ · ~~Constraint Compression~~ · Deterministic Hooks · Execution DAG |
-| **v3.6** | Cross-Platform Protocol | JSON Schema standard · Platform adapters · Global Failure Graph sync |
-| **v4.0** | Native Agent Runtime | Runtime hooking · Agent framework integration · No prompt dependency |
-
-**Long-term trajectory:**
-
-```
-Prompt-Orchestrated Runtime
-        ↓
-Structured Cognitive Runtime (v3.5)
-        ↓
-Cross-Platform Cognitive State Standard (v3.6)
-        ↓
-Native Agent Runtime Kernel (v4.0)
-```
+| Problem | Status |
+|---------|--------|
+| Prompt compliance not enforceable | v3.6 will add structured hooks |
+| L2 extraction is AI-summarized | v4.2 will add deterministic hooks |
+| ~~Constraint list can grow unbounded~~ | v3.5 solved: Constraint Compressor |
+| ~~Relative-path cwd drift~~ | v3.5.1 solved: Workspace root enforcement |
+| ~~No structured index~~ | v4.0 solved: SQLite inverted index |
+| ~~No semantic search~~ | v4.1 solved: Embedding reranking |
 
 ---
 
@@ -377,55 +336,52 @@ AI 智能体失败的原因，不是忘记了对话，而是**重复了被拒绝
 | **核心原语** | 语义检索（RAG） | 负向认知记忆 |
 | **平台锁定** | 是 | 否 — 纯文件，适配任何 LLM |
 
-**跨平台**是核心差异化点。在 Claude Code 记录的失败经验，可以带到 Cursor、Windsurf 或任何 LLM 继续使用——因为 MindSave 的设计本身就与平台无关。
-
 ---
 
-### 工作原理
+### 架构（v4.0+）
 
-三层结构，按信息密度分层：
+MindSave v4.0 引入了**三层分离架构**（灵感来自 OAIS 图书馆模型）：
 
 ```
-┌─────────────────────────────────────────┐
-│  L1: 执行寄存器         ≤ 300 tokens   │  始终恢复
-│  goal · state · next_action · blocker   │
-├─────────────────────────────────────────┤
-│  L2: 认知缓存           ≤ 500 tokens   │  按需恢复
-│  constraints · decisions · failure_graph│
-├─────────────────────────────────────────┤
-│  L3: 冷存档             无限制         │  仅调试，永不自动恢复
-│  tool_logs · completed_steps · diffs    │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  存储层    段文件（全文落盘，不压缩）                        │
+│  .mindsave/v4/segments/*.md                                │
+├──────────────────────────────────────────────────────────┤
+│  索引层    SQLite 倒排索引（零依赖）                        │
+│  .mindsave/v4/index.db（7 张表）                           │
+├──────────────────────────────────────────────────────────┤
+│  上下文层  L1 + L2 + 召回段（token 预算硬约束）              │
+│  按需恢复，目标 ≤ 800 tokens                               │
+└──────────────────────────────────────────────────────────┘
 ```
+
+**上下文层**仍使用 L1/L2/L3 模型：
+
+| 层 | 类比 | 何时读取 | Token 预算 |
+|----|------|---------|-----------|
+| L1: 执行寄存器 | CPU 寄存器 | 始终 | ≤ 300 |
+| L2: 认知缓存 | L1/L2 缓存 | 按需 | ≤ 500 |
+| L3: 冷存档 | 磁盘 | 仅调试 | 无限制 |
 
 **恢复总成本：≤ 800 tokens** — 对比恢复整个对话历史。
 
 ---
 
-### 核心原语：Failure Graph
+### 语义精排（v4.1）
 
-`excluded_paths` 是 MindSave 最原创的贡献 — 结构化的"不该做什么"记忆：
+v4.1 在关键词检索之上增加了 embedding 语义精排：
 
-```yaml
-# 旧版（v3.4）— 扁平列表
-excluded_paths:
-  - "不要用 Tailwind — 导致样式冲突"
-
-# 当前（v3.5.1）— Failure Graph（已实现）
-failure_graph:
-  Tailwind:
-    rejected_by: user
-    reason: "causes style conflict with existing CSS"
-    repeat_count: 3
-    confidence: high
-    scope: project           # project | global（跨平台同步）
-    related: ["Bootstrap", "utility-first CSS"]
-    alternatives: ["CSS Modules", "vanilla CSS with variables"]
+```
+查询 → 关键词召回（top-K）→ embed(查询) → 余弦相似度 → α×kw + β×cosine → 重排结果
 ```
 
-`scope` 字段是跨平台的关键：`global` 级别的失败经验同步到 `~/.mindsave/global/`，被所有项目、所有平台加载。
+双后端自动降级：
 
-**经验法则：** 如果删除这条信息会导致下个会话——在任何平台上——重复犯错，它就属于 L2。
+| 后端 | 要求 | 场景 |
+|------|------|------|
+| Ollama | `localhost:11434` | 本地开发，GPU 加速 |
+| ONNX Runtime | `pip install onnxruntime` | 生产环境，无外部服务 |
+| 无 | — | 纯关键词降级（零依赖） |
 
 ---
 
@@ -436,14 +392,84 @@ failure_graph:
 cp CLAUDE.md your-project/
 cp -r .mindsave/ your-project/
 
-# 2.（可选）安装 SDK
-pip install mindsave        # Python
-npm install mindsave        # TypeScript
+# 2.（可选）安装 Python SDK
+pip install mindsave
 
-# 3. 对话中使用：/save · /load · /recall · /auto-snapshot
+# 3. 对话中使用：/save · /load · /recall
 ```
 
 **零依赖。无需 API 密钥。无需构建。适配任何 LLM。**
+
+---
+
+### SDK 用法（v4.1）
+
+**Python:**
+
+```python
+from mindsave import MindSave, Retriever, create_embedding_client
+
+# 初始化（带语义精排）
+ms = MindSave(".mindsave", embedding_backend="ollama")
+
+# v4.0: 分段保存
+ms.save_segments(
+    session_meta={"project": "MYAPP", "task_type": "FEAT"},
+    segments=[{"layer": "L1", "content": "..."}]
+)
+
+# v4.0: 多维度检索
+result = ms.recall("JWT auth", limit=5)
+
+# v4.1: 语义精排
+hits = ms.retriever.search_with_rerank(
+    "认证流程",
+    embedding_client=create_embedding_client("ollama"),
+    alpha=0.4, beta=0.6
+)
+
+# v3.5 兼容: 快速保存/恢复
+ms.save({"goal": "...", "state": "...", "next_action": "..."})
+state = ms.restore_latest()
+```
+
+**TypeScript:**
+
+```typescript
+import { MindSave } from "mindsave";
+
+const ms = new MindSave(".mindsave");
+ms.save({ goal: "...", state: "...", next_action: "..." });
+const snapshot = ms.restore("snapshot_id");
+```
+
+> 完整 API 文档见 [sdk/README.md](./sdk/README.md)。
+
+---
+
+### 命令
+
+**v4.0 命令:**
+
+| 命令 | 说明 |
+|------|------|
+| `/save` | 保存段（演示或交互式） |
+| `/load` | 恢复最新会话（L1+L2，连续模式） |
+| `/recall <query>` | 多维度检索 |
+| `/index rebuild` | 重建 SQLite 倒排索引 |
+| `/index stats` | 显示索引统计 |
+| `/migrate v3-to-v4` | 迁移 v3.5 快照到 v4 段 |
+| `/segments list` | 列出所有段 |
+| `/segments show <id>` | 显示段详情 |
+
+**v3.5 兼容命令:**
+
+| 命令 | 说明 |
+|------|------|
+| `list` | 列出快照 |
+| `stats` | 显示统计 |
+| `clean` | 清理旧快照 |
+| `signal` | 显示压力信号 |
 
 ---
 
@@ -451,34 +477,62 @@ npm install mindsave        # TypeScript
 
 ```
 [当前会话] 修复登录页样式 Bug，已进行 15 轮对话...
-[系统提示] ⚠️ 上下文已用 82%，MindSave 自动保存 L1 快照
+[系统提示] 上下文已用 72%，MindSave 自动保存 L1 快照
 
 [新对话 — 同一平台或不同平台] 输入 /load
 [AI]     列出快照：
-           [1] 2026-05-09 14:30 — 修复登录页样式 Bug [活跃文件: 2] [下一步: 3]
+           [1] 2026-06-18 14:30 — 修复登录页样式 Bug [活跃文件: 2]
          恢复 L1 + L2 中...
-         ✅ 目标：修复登录页在移动端样式错乱。
-            已加载 failure_graph（3 条跨平台约束）。
-            下一步：在真实 iOS Safari 环境验证。是否继续？
+         目标：修复登录页在移动端样式错乱。
+         已加载 failure_graph（3 条跨平台约束）。
+         下一步：在真实 iOS Safari 环境验证。是否继续？
 [用户]   继续
 [AI]     （从恢复状态继续，无需重复推理）
 ```
 
 ---
 
-### 命令
+### 核心原语：Failure Graph
 
-| 命令 | 层 | 说明 |
-|------|---|------|
-| `/save` | L1+L2+L3 | 完整检查点，L2 从对话自动提炼 |
-| `/load` | L1+L2 | 恢复状态，进入连续模式 |
-| `/load --verify` | L1+L2 | 恢复 + 检查文件存在性与平台兼容性 |
-| `/recall` | L3 | 只读检查历史 |
-| `/recall "关键词"` | L3 | 搜索所有 L3 快照 |
-| `/auto-snapshot` | 仅 L1 | 溢出保护（≤ 300 tokens），然后中断 |
-| `/snapshots list` | — | 列出所有快照（时间、大小、有效性） |
-| `/snapshots clean` | — | 清理超出上限或已完成超 30 天的快照 |
-| `/snapshots stats` | — | 显示 L1/L2/L3 分布统计 |
+```yaml
+failure_graph:
+  Tailwind:
+    rejected_by: user
+    reason: "导致与现有 CSS 样式冲突"
+    repeat_count: 3
+    confidence: high
+    scope: project           # project | global（跨平台同步）
+    related: ["Bootstrap", "utility-first CSS"]
+    alternatives: ["CSS Modules", "vanilla CSS with variables"]
+```
+
+`scope` 字段是跨平台的关键：`global` 级别的失败经验同步到 `~/.mindsave/global/`，被所有项目、所有平台加载。
+
+---
+
+### 目录结构（v4.0+）
+
+```
+your-project/
+├── CLAUDE.md                  # 运行时规则（多数 AI 工具自动加载）
+└── .mindsave/
+    ├── index.json             # v3.5 快照索引
+    ├── signal.json            # 运行时状态（自动生成）
+    ├── snapshots/             # v3.5 快照
+    ├── failure_graph/
+    │   ├── project/           # 项目级失败记忆
+    │   └── global/            # 跨平台失败记忆
+    ├── tool_logs/             # 工具调用日志（JSONL, L3）
+    └── v4/                    # v4.0+ 数据层
+        ├── index.db           # SQLite 倒排索引（7 张表）
+        ├── segments/          # 段文件（全文）
+        └── sessions/          # 会话元数据
+
+~/.mindsave/
+└── global/                    # 用户级全局存储
+    ├── nodes/
+    └── anti_patterns.json
+```
 
 ---
 
@@ -497,6 +551,21 @@ npm install mindsave        # TypeScript
 
 ---
 
+### 自适应阈值
+
+```
+WARNING  = 0.60 × 增长系数 × 复杂度系数
+CRITICAL = 0.80 × 增长系数 × 复杂度系数
+```
+
+| 增长率 | 调用 / 5分钟 | 系数 | WARNING | CRITICAL |
+|--------|-------------|------|---------|----------|
+| 慢（问答） | ≤ 2 | × 1.2 | 72% | 96% |
+| 正常（编码） | 3–6 | × 1.0 | 60% | 80% |
+| 快（重构） | ≥ 7 | × 0.8 | 48% | 64% |
+
+---
+
 ### 平台兼容性
 
 | 平台 | 使用方式 |
@@ -507,53 +576,32 @@ npm install mindsave        # TypeScript
 | Trae | 将 `CLAUDE.md` 复制到项目根目录（自动加载） |
 | 任何支持系统提示的 AI | 将 `CLAUDE.md` 内容粘贴到系统提示 |
 
-**跨平台迁移：**
+---
 
-```bash
-# 从 Claude Code 迁移到 Cursor
-mindsave export --platform cursor    # 生成 Cursor 兼容配置
-mindsave export --scope global       # 导出全局 failure_graph
-# 在新机器 / 新平台：
-mindsave import                      # 导入全局 failure_graph
-```
+### 路线图
+
+| 版本 | 重点 | 状态 |
+|------|------|------|
+| **v3.5** | 结构化认知运行时 | 已完成（Failure Graph, 约束压缩） |
+| **v4.0** | 三层分离架构 | 已完成（Segment, Indexer, Retriever, Restorer, Migrator） |
+| **v4.1** | 语义精排 | 已完成（Ollama/ONNX embedding, 余弦融合） |
+| **v3.6** | 跨平台协议 | 计划中（JSON Schema, 平台适配器） |
+| **v4.2** | Hooks 自动分段 | 远期 |
+
+详见 [ROADMAP.md](./ROADMAP.md)。
 
 ---
 
 ### 已知局限
 
-MindSave 当前是 **Prompt-Orchestrated Runtime** — AI 遵守指令，尚无强制执行的 hooks：
-
-| 问题 | 影响 |
+| 问题 | 状态 |
 |------|------|
-| Prompt 合规不可强制 | 弱模型可能 state drift |
-| L2 提取由 AI 摘要 | 可能漏判或 hallucinate 约束 |
-| 约束列表可无限增长 | **v3.5 已解决：Constraint Compressor** |
-| 相对路径 cwd 漂移 | **v3.5.1 已解决：强制 workspace root** |
-| 无确定性运行时 hooks | Hidden state 无法捕获 |
-
-这些是 v3.6 和 v4.0 的核心改进目标。详见 [ROADMAP.md](./ROADMAP.md)。
-
----
-
-### 路线图
-
-| 版本 | 重点 | 关键交付 |
-|------|------|---------|
-| **v3.5** | Structured Cognitive Runtime | ~~Failure Graph~~ · ~~约束压缩~~ · Deterministic Hooks · Execution DAG |
-| **v3.6** | 跨平台协议 | JSON Schema 标准 · 平台适配器 · Global Failure Graph 同步 |
-| **v4.0** | Native Agent Runtime | Runtime Hooking · Agent 框架集成 · 脱离 Prompt 依赖 |
-
-**长期演进：**
-
-```
-Prompt-Orchestrated Runtime
-        ↓
-Structured Cognitive Runtime（v3.5）
-        ↓
-跨平台认知状态标准（v3.6）
-        ↓
-Native Agent Runtime Kernel（v4.0）
-```
+| Prompt 合规不可强制 | v3.6 将添加结构化 hooks |
+| L2 提取由 AI 摘要 | v4.2 将添加确定性 hooks |
+| ~~约束列表可无限增长~~ | v3.5 已解决：约束压缩器 |
+| ~~相对路径 cwd 漂移~~ | v3.5.1 已解决：强制 workspace root |
+| ~~无结构化索引~~ | v4.0 已解决：SQLite 倒排索引 |
+| ~~无语义搜索~~ | v4.1 已解决：Embedding 精排 |
 
 ---
 

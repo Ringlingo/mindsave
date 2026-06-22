@@ -1,7 +1,7 @@
 # MindSave ROADMAP
 
-> 当前版本：v3.5 · Structured Cognitive Runtime
-> 文档更新：2026-05-12
+> 当前版本：v4.1 · 三层分离架构 + 语义精排
+> 文档更新：2026-06-18
 
 ---
 
@@ -25,10 +25,12 @@ MindSave 不是 AI Memory 工具，不是聊天记录备份，不是某个平台
 ## 演进路线
 
 ```
-v3.4  Prompt-Orchestrated Runtime      
-v3.5  Structured Cognitive Runtime     ← 当前（P0/P1 已完成）
-v3.6  Cross-Platform Protocol          ← 实现真正跨平台
-v4.0  Native Agent Runtime Kernel      ← 脱离 Prompt 依赖
+v3.4  Prompt-Orchestrated Runtime
+v3.5  Structured Cognitive Runtime     ✅ 完成
+v3.6  Cross-Platform Protocol          ← 下一阶段
+v4.0  三层分离架构 (已实现)             ✅
+v4.1  语义精排 (已实现)                 ✅ ← 当前
+v4.2  Hooks 自动分段 (远期)
 ```
 
 ---
@@ -390,43 +392,53 @@ mindsave export --platform cursor    # 生成平台专属配置
 
 ---
 
-## Phase 3：Native Agent Runtime Kernel（v4.0）
+## Phase 3：三层分离架构（v4.0）✅ 已实现
 
-**长期方向。不是 v3.x 要做的事。**
+**已实现。状态由代码路径强制写入，而非依赖 Prompt。**
 
-### 目标
+### 已完成
 
-脱离 Prompt 依赖，状态由代码路径强制写入。
+- **三层分离架构**: 存储层 (段全文落盘) + 索引层 (SQLite 倒排索引) + 上下文层 (L1+L2+召回段)
+- **Segment 模型**: SegmentID 格式 `PROJ-TYPE-SEQ-SEG`，10 种受控 task_type
+- **Indexer**: SQLite 倒排索引核心层 (零依赖)，7 张表
+- **Retriever**: 多维度关键词检索
+- **Restorer**: 按需提取段全文 + token 预算控制
+- **Migrator**: v3.5 快照 → v4.0 段自动迁移 (23 旧快照 → 72 段/23 会话/1404 关键字)
+- **CLI v4.0**: /save /load /recall /index /migrate /segments 命令族
+- 231 测试通过 (194 v4.0 + 37 v4.1)
 
-### Runtime Hooking
+### 原计划但未实现（移至 v4.2+）
 
-在 planner → executor → tool 调用链路注入 hooks，直接捕获状态变化：
+- Runtime Hooking (planner → executor → tool 调用链路注入 hooks)
+- Agent 框架深度集成 (LangGraph BaseCheckpointSaver 等)
+- Native State Engine (Agent Action → State Transition → Persist)
 
-```python
-@mindsave.hook("tool_call")
-def on_tool_call(event: ToolCallEvent):
-    if event.result == "rejected":
-        ms.failure_graph.add(event.tool, reason=event.rejection_reason)
-```
+---
 
-### Agent 框架集成
+## Phase 3.5：语义精排（v4.1）✅ 已实现
 
-| 框架 | 集成方式 |
-|------|---------|
-| LangGraph | 实现 `BaseCheckpointSaver` |
-| CrewAI | 实现 `Memory` 接口 |
-| AutoGen | Hook `ConversableAgent` memory |
-| Semantic Kernel | Plugin 接口 |
+**已实现。在关键词检索基础上增加 embedding 语义精排。**
 
-### Native State Engine
+### 已完成
 
-```
-Agent Action → State Transition → MindSave State Engine → Persist
-                                         ↓
-                                  Failure Graph Update
-                                  Constraint Validation
-                                  DAG Progress Update
-```
+- **Embedding 双后端**: OllamaBackend (localhost:11434) + ONNXBackend (本地 ONNX Runtime)
+- **语义精排**: `Retriever.search_with_rerank()` — keyword 召回 → embedding cosine similarity → α×kw + β×cosine 融合重排
+- **Embedding 存储**: index.db `embeddings` 表 (segment_id PK, model, vector BLOB, dim, created_at)
+- **自动降级**: embedding 后端不可用时退化为纯关键词检索
+- 新增 37 个 v4.1 测试，总计 231 测试通过
+
+---
+
+## Phase 4：Hooks 自动分段（v4.2）远期
+
+**目标：自动捕获 Agent 执行过程中的状态变化，无需手动 /save。**
+
+### 规划
+
+- Hook 事件格式定义 (`hook_type`, `value`, `source`, `platform`, `timestamp`)
+- Python SDK Hook 接口实现
+- `source` 权重体系: `user_correction` > `explicit_decision` > `error_recovery` > `ai_inferred`
+- 自动分段：根据执行流自然边界自动切分 Segment
 
 ---
 
@@ -448,11 +460,19 @@ Agent Action → State Transition → MindSave State Engine → Persist
 ## 优先级总览
 
 ```
-立即（v3.5）
-  P0  Failure Graph 图结构化
-  P1  Constraint Compression Engine
-  P2  Deterministic Hook 接口
-  P3  Execution DAG
+已完成（v3.5）
+  P0  Failure Graph 图结构化          ✅
+  P1  Constraint Compression Engine   ✅
+
+已完成（v4.0）
+      三层分离架构 (存储+索引+上下文)  ✅
+      Segment / Indexer / Retriever   ✅
+      Migrator (v3.5→v4.0)            ✅
+      CLI v4.0 命令族                 ✅
+
+已完成（v4.1）
+      语义精排 (Ollama/ONNX)          ✅
+      Embedding 存储 + 自动降级       ✅
 
 接下来（v3.6）
   P0  JSON Schema 标准化
@@ -460,13 +480,13 @@ Agent Action → State Transition → MindSave State Engine → Persist
   P2  Global Failure Graph 双级同步
   P3  跨平台一致性验证
 
-长期（v4.0）
+远期（v4.2）
+      Hooks 自动分段
       Runtime Hooking
       Agent 框架深度集成
-      Native State Engine
 ```
 
 ---
 
-*最后更新：2026-05-12*
-*v3.5 (P0/P1 done) → v3.6 → v4.0*
+*最后更新：2026-06-18*
+*v4.1 (done) → v3.6 → v4.2*

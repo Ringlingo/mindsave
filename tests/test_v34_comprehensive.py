@@ -244,8 +244,8 @@ def test_all():
         print(f"  • get_signal() method: ✓")
 
     finally:
-        # Cleanup
-        shutil.rmtree(test_dir)
+        # Cleanup (ignore_errors for Windows file-lock on SQLite files)
+        shutil.rmtree(test_dir, ignore_errors=True)
         print(f"\nTest directory cleaned up: {test_dir}")
 
 if __name__ == "__main__":

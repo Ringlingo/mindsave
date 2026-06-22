@@ -5,6 +5,40 @@ All notable changes to MindSave will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-06-18
+
+### Added
+
+- **语义精排 (v4.1)**: `Retriever.search_with_rerank()` 实现 keyword 召回 → embedding cosine similarity → α×kw + β×cosine 融合重排
+- **Embedding 双后端**: `OllamaBackend` (localhost:11434) + `ONNXBackend` (本地 ONNX Runtime)，自动降级
+- **Embedding 存储**: index.db 新增 `embeddings` 表 (segment_id PK, model, vector BLOB, dim, created_at)
+- **Indexer embedding 方法**: `write_embedding` / `read_embedding` / `embed_all_segments`
+- **`create_embedding_client` 工厂函数**: 统一后端创建接口
+- **`cosine_similarity` / `vector_to_blob` / `blob_to_vector` 工具函数**
+- 新增 37 个 v4.1 测试 (`test_v4_embedding_client.py` + `test_v4_rerank.py`)，总计 231 测试通过
+
+### Fixed
+
+- **紧急修复**: 批量脚本将换行符 `\n` 写成字面量 `/n`，导致 indexer/retriever/restorer/migrator 4 文件语法错误，SDK 无法导入 — 已修复
+- **裸导入修复**: `indexer.py` (2处) + `retriever.py` (1处) 函数内 `from embedding_client import` 改为 try/except 双模式
+
+## [4.0.0] - 2026-06-17
+
+### Added
+
+- **三层分离架构**: 存储层 (段全文落盘) + 索引层 (SQLite 倒排索引) + 上下文层 (L1+L2+召回段, token 预算硬约束)
+- **Segment 模型**: SegmentID 格式 `PROJ-TYPE-SEQ-SEG` (图书馆索书号风格)，10 种受控 task_type
+- **SegmentStore**: 段全文完整落盘不压缩，`content_offset` + `content_length` 定位
+- **Indexer**: SQLite 倒排索引核心层 (零依赖)，7 张表 (manifest/sessions/inverted_index/file_index/failure_index/access_log/embeddings)
+- **Vocabulary**: 受控词表 (FEAT/BUGX/RFCT/DOCS/TEST/RSCH/DEPL/DBGR/MIGR/DISC)
+- **QueryParser**: 支持 `keyword type:FEAT session:XY` 过滤语法
+- **Retriever**: 多维度关键词检索 + 召回
+- **Restorer**: 按需提取段全文 + token 预算控制
+- **Migrator**: v3.5 快照 → v4.0 段自动迁移 (23 旧快照 → 72 段/23 会话/1404 关键字)
+- **MindSave 主类集成**: `save_segments()` / `recall()` / `embed_all_segments()` / `restore_latest()` (v3.5 兼容)
+- **CLI v4.0**: `/save` `/load` `/recall` `/index` `/migrate` `/segments` 命令族
+- 194 个 v4.0 测试通过，v3.5 现有 12 测试全兼容
+
 ## [3.5.0] - 2026-05-12
 
 ### Added
@@ -67,6 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML front matter format for snapshots.
 - Index tracking and signal state.
 
+[4.1.0]: https://github.com/Ringlingo/mindsave/compare/v4.0.0...v4.1.0
+[4.0.0]: https://github.com/Ringlingo/mindsave/compare/v3.5.1...v4.0.0
 [3.5.1]: https://github.com/Ringlingo/mindsave/compare/v3.5.0...v3.5.1
 [3.5.0]: https://github.com/Ringlingo/mindsave/compare/v3.0.0...v3.5.0
 [3.0.0]: https://github.com/Ringlingo/mindsave/compare/v2.0.0...v3.0.0

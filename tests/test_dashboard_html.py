@@ -1,8 +1,12 @@
 """Dashboard HTML structural validation"""
 import re
 import sys
+from pathlib import Path
 
-with open(r"j:\TraeSolo工作区\projects\mindsave\sdk\tools\mindsave_dashboard.html", encoding="utf-8") as f:
+# Locate dashboard.html relative to this test file (tests/ -> ../sdk/tools/)
+_DASHBOARD = Path(__file__).resolve().parent.parent / "sdk" / "tools" / "mindsave_dashboard.html"
+
+with open(_DASHBOARD, encoding="utf-8") as f:
     html = f.read()
 
 issues = []

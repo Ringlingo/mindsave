@@ -8,6 +8,9 @@
 !.mindsave/tool_logs/.gitkeep
 !.mindsave/tool_logs/example-session.jsonl
 
+# v4 runtime data (index.db, segments/, embeddings/) — never commit
+**/.mindsave/v4/
+
 # Runtime heartbeat (environment-specific)
 .mindsave/signal.json
 
@@ -32,3 +35,5 @@ dist/
 
 # Test temp
 .test-temp/
+.coverage
+.pytest_cache/

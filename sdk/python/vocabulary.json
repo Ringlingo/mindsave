@@ -1,0 +1,93 @@
+{
+  "task_types": {
+    "FEAT": {
+      "name": "功能开发",
+      "desc": "新功能、新模块、新接口"
+    },
+    "BUGX": {
+      "name": "Bug 修复",
+      "desc": "缺陷修复、错误处理"
+    },
+    "RFCT": {
+      "name": "重构",
+      "desc": "代码重构、架构调整、不改变行为"
+    },
+    "DOCS": {
+      "name": "文档",
+      "desc": "文档撰写、注释、README"
+    },
+    "TEST": {
+      "name": "测试",
+      "desc": "单元测试、集成测试、E2E"
+    },
+    "RSCH": {
+      "name": "研究",
+      "desc": "技术调研、可行性分析、POC"
+    },
+    "DEPL": {
+      "name": "部署",
+      "desc": "运维、CI/CD、容器化、发布"
+    },
+    "DBGR": {
+      "name": "调试",
+      "desc": "排障、日志分析、性能剖析"
+    },
+    "MIGR": {
+      "name": "迁移",
+      "desc": "版本升级、数据迁移、框架替换"
+    },
+    "DISC": {
+      "name": "讨论",
+      "desc": "需求讨论、方案设计、规划"
+    }
+  },
+  "operation_verbs": {
+    "add": "新增",
+    "create": "创建",
+    "implement": "实现",
+    "fix": "修复",
+    "resolve": "解决",
+    "patch": "补丁",
+    "refactor": "重构",
+    "rename": "重命名",
+    "move": "移动",
+    "delete": "删除",
+    "remove": "移除",
+    "test": "测试",
+    "verify": "验证",
+    "deploy": "部署",
+    "publish": "发布",
+    "research": "调研",
+    "analyze": "分析",
+    "document": "文档化",
+    "comment": "注释"
+  },
+  "keyword_aliases": {
+    "jwt": [
+      "json web token",
+      "json-web-token"
+    ],
+    "auth": [
+      "authentication",
+      "authorization",
+      "鉴权",
+      "认证"
+    ],
+    "db": [
+      "database",
+      "数据库"
+    ],
+    "api": [
+      "endpoint",
+      "接口"
+    ],
+    "ui": [
+      "interface",
+      "界面"
+    ],
+    "css": [
+      "stylesheet",
+      "样式"
+    ]
+  }
+}

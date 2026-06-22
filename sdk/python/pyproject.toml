@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mindsave"
-version = "3.5.0"
+version = "4.1.0"
 authors = [
   { name="MindSave Team" }
 ]
@@ -36,4 +36,4 @@ package-dir = { "mindsave" = "." }
 mindsave = ["*.py"]
 
 [project.scripts]
-mindsave = "mindsave.mindsave:_main_cli"
+mindsave = "mindsave.cli:main"
